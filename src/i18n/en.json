@@ -101,6 +101,7 @@
   "reason.dispute-accept": "Accepting a dispute claim always needs a manager.",
   "reason.UNKNOWN_TOOL": "This tool is not covered by the policy.",
   "reason.UNTRUSTED_SOURCE": "Amounts, IDs or payees for this action came from untrusted text.",
+  "reason.INJECTION_SUSPECTED": "Blocked as a suspected prompt injection: the amount or target came from pasted third-party text that tries to override instructions. If this action is legitimate, state it as your own explicit instruction.",
   "reason.AMOUNT_REQUIRED": "An explicit amount is required (PayPal would otherwise refund the full capture).",
   "reason.INVALID_AMOUNT": "The amount must be greater than zero.",
   "reason.CURRENCY_NOT_ALLOWED": "Only USD is allowed.",

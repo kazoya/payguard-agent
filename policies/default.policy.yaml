@@ -69,4 +69,5 @@ rules:
 #  - unknown tool -> DENY (UNKNOWN_TOOL)
 #  - create_refund without explicit amount -> DENY (AMOUNT_REQUIRED)
 #  - sensitive tool with untrusted provenance -> DENY (UNTRUSTED_SOURCE)
+#  - sensitive tool whose amount/id comes from pasted text with override markers -> DENY (INJECTION_SUSPECTED)
 #  - refund amount > remaining captured amount -> DENY (REFUND_EXCEEDS_CAPTURE)

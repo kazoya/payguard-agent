@@ -50,6 +50,24 @@ describe("PolicyGuard end-to-end (mock PayPal, in-memory DB)", () => {
     expect(await h.guard.handle(refund("10.00", "untrusted"))).toMatchObject({ status: "denied", ruleId: "UNTRUSTED_SOURCE" });
   });
 
+  it("suspected pasted-text injection -> DENY (INJECTION_SUSPECTED), audited, never queued", async () => {
+    const h = harness();
+    const injection = { suspected: true as const, markers: ["system-override"], values: ["amount:900.00"], sources: ["quote" as const] };
+    const out = await h.guard.handle({ ...refund("900.00"), injection });
+    expect(out).toMatchObject({ status: "denied", ruleId: "INJECTION_SUSPECTED" });
+    expect(h.paypal.calls).toHaveLength(0);
+    expect(h.approvals.list()).toHaveLength(0);
+    const rows = h.audit.all();
+    expect(rows.map((r) => r.event)).toEqual(["PROPOSED", "DENIED"]);
+    expect(JSON.parse(rows[1]!.detail_json!)).toMatchObject({ ruleId: "INJECTION_SUSPECTED", injection: { markers: ["system-override"], values: ["amount:900.00"] } });
+    expect(h.audit.verifyChain()).toMatchObject({ ok: true });
+  });
+
+  it("a verdict that is not suspected changes nothing", async () => {
+    const h = harness();
+    expect(await h.guard.handle({ ...refund("120.00"), injection: { suspected: false } })).toMatchObject({ status: "pending_approval", ruleId: "refund-large" });
+  });
+
   it("unknown tool -> DENY", async () => {
     const h = harness();
     expect(await h.guard.handle({ ...refund(), tool: "create_payout", args: {} })).toMatchObject({ status: "denied", ruleId: "UNKNOWN_TOOL" });

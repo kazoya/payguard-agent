@@ -10,7 +10,7 @@ describe("reason and error code translations", () => {
   it("has an Arabic reason for every non-silent policy rule and built-in deny code", () => {
     const policy = loadPolicyFile(DEFAULT_POLICY_FILE);
     const ids = policy.rules.filter((r) => r.decision !== "ALLOW").map((r) => r.id);
-    const builtIns = ["UNKNOWN_TOOL", "UNTRUSTED_SOURCE", "AMOUNT_REQUIRED", "INVALID_AMOUNT", "CURRENCY_NOT_ALLOWED", "REFUND_EXCEEDS_CAPTURE", "NO_MATCHING_RULE", "INVALID_ARGS"];
+    const builtIns = ["UNKNOWN_TOOL", "UNTRUSTED_SOURCE", "INJECTION_SUSPECTED", "AMOUNT_REQUIRED", "INVALID_AMOUNT", "CURRENCY_NOT_ALLOWED", "REFUND_EXCEEDS_CAPTURE", "NO_MATCHING_RULE", "INVALID_ARGS"];
     for (const id of [...ids, ...builtIns]) expect(AR[`reason.${id}`], id).toBeTruthy();
   });
 

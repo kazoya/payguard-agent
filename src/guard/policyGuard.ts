@@ -9,6 +9,7 @@ import type { Policy } from "./policy";
 import { evaluate, type CallFacts, type Provenance } from "./policyEngine";
 import type { ActionRunner } from "./runner";
 import { describeArgIssues } from "./argFeedback";
+import type { InjectionVerdict } from "./injection";
 import { extractCaptureId, extractMoneyFacts, extractOrderId } from "./toolArgs";
 
 /**
@@ -23,6 +24,8 @@ export type GuardRequest = {
   tool: string;
   args: Record<string, unknown>;
   provenance: Provenance;
+  /** Result of the pasted-text injection check (injection.ts); absent means not suspected. */
+  injection?: InjectionVerdict;
   /** Changes made by argument normalization before the guard saw the call (audited). */
   normalized?: string[];
 };
@@ -47,8 +50,9 @@ export class PolicyGuard {
 
   async handle(req: GuardRequest): Promise<GuardOutcome> {
     const { policy, audit, runner, approvals } = this.deps;
+    const injection = req.injection?.suspected ? { markers: req.injection.markers, values: req.injection.values, sources: req.injection.sources } : null;
     const inputHash = hashJson({ tool: req.tool, args: req.args });
-    audit.append({ actor: req.actor.id, event: "PROPOSED", tool: req.tool, inputHash, detail: { args: req.args, provenance: req.provenance, ...(req.normalized?.length ? { normalized: req.normalized } : {}) } });
+    audit.append({ actor: req.actor.id, event: "PROPOSED", tool: req.tool, inputHash, detail: { args: req.args, provenance: req.provenance, ...(req.normalized?.length ? { normalized: req.normalized } : {}), ...(injection ? { injection } : {}) } });
 
     const money = extractMoneyFacts(req.tool, req.args);
     if (!money.ok) {
@@ -64,7 +68,7 @@ export class PolicyGuard {
     const event = decision.decision === "ALLOW" ? "ALLOWED" : decision.decision === "DENY" ? "DENIED" : "QUEUED";
 
     if (decision.decision === "DENY") {
-      audit.append({ actor: req.actor.id, event, tool: req.tool, decision: decision.decision, inputHash, detail: { ruleId: decision.ruleId, reason: decision.reason } });
+      audit.append({ actor: req.actor.id, event, tool: req.tool, decision: decision.decision, inputHash, detail: { ruleId: decision.ruleId, reason: decision.reason, ...(decision.ruleId === "INJECTION_SUSPECTED" && injection ? { injection } : {}) } });
       return { status: "denied", tool: req.tool, ruleId: decision.ruleId, reason: decision.reason };
     }
 
@@ -93,6 +97,7 @@ export class PolicyGuard {
       amountMinor,
       currency,
       provenance: req.provenance,
+      injectionSuspected: req.injection?.suspected === true,
       dailyRefundTotalMinor: store.dailyTotalMinor("create_refund", dayKey(clock(), policy.timezone)),
     };
     if (req.tool === "pay_order") {

@@ -16,5 +16,6 @@
   "done.list": "Done. {n} result(s).",
   "pending": "This needs a manager's approval ({reason}). Request {id} is waiting on the Approvals page.",
   "denied": "Blocked by policy ({rule}): {reason}",
-  "failed": "PayPal returned an error: {code} {message}"
+  "failed": "PayPal returned an error: {code} {message}",
+  "injection.note": "Blocked as a suspected prompt injection: the amount or target came from pasted text that tries to override PayGuard's instructions (for example \"SYSTEM OVERRIDE\" or \"ignore policy\"). Nothing was executed or sent for approval. If the refund is legitimate, issue it as your own explicit instruction, for example: \"Refund $X on capture ID, reason ...\"."
 }

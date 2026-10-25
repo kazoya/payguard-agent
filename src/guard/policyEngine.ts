@@ -14,6 +14,8 @@ export type CallFacts = {
   amountMinor: number | null;
   currency: string | null;
   provenance: Provenance;
+  /** A decisive value came from pasted third-party text carrying injection markers (see injection.ts). */
+  injectionSuspected?: boolean;
   /** Refunds already executed today (policy time zone), minor units. */
   dailyRefundTotalMinor: number;
   orderCreatedByPayguard?: boolean;
@@ -24,6 +26,7 @@ export type CallFacts = {
 export type BuiltInRuleId =
   | "UNKNOWN_TOOL"
   | "UNTRUSTED_SOURCE"
+  | "INJECTION_SUSPECTED"
   | "AMOUNT_REQUIRED"
   | "INVALID_AMOUNT"
   | "CURRENCY_NOT_ALLOWED"
@@ -34,6 +37,9 @@ export type Decision = { decision: DecisionKind; ruleId: string; reason: string 
 
 /** Tools that move money and therefore carry an amount the policy reasons about. */
 export const AMOUNT_TOOLS = new Set(["create_refund", "create_order"]);
+
+export const INJECTION_REASON =
+  "Blocked as a suspected prompt injection: the amount or target came from pasted third-party text that tries to override instructions. If this action is legitimate, state it as your own explicit instruction.";
 
 const deny = (ruleId: BuiltInRuleId, reason: string): Decision => ({ decision: "DENY", ruleId, reason });
 
@@ -50,6 +56,9 @@ export function evaluate(policy: Policy, facts: CallFacts): Decision {
   const sensitive = policy.sensitive_tools.includes(facts.tool);
   if (sensitive && facts.provenance === "untrusted") {
     return deny("UNTRUSTED_SOURCE", "Amounts, IDs or payees for this action came from untrusted text.");
+  }
+  if (sensitive && facts.injectionSuspected) {
+    return deny("INJECTION_SUSPECTED", INJECTION_REASON);
   }
   if (AMOUNT_TOOLS.has(facts.tool)) {
     if (facts.amountMinor === null) {
