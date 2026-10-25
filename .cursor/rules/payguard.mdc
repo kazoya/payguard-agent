@@ -1,0 +1,58 @@
+---
+description: PayGuard Agent project rules (stack, conventions, sandbox-only, secrets, tests)
+globs:
+alwaysApply: true
+---
+
+# PayGuard Agent: project rules
+
+## What this is
+PayGuard Agent is a policy-guarded AI finance-ops agent on top of the **PayPal sandbox**, built for the PayPal AI Hackathon (deadline Nov 12, 2026). Read `SPEC.md` before any change, and implement only the slice you were given from `TASKS.md`.
+
+## Stack (do not change without updating SPEC.md)
+- TypeScript `strict: true`, Node.js 20 LTS (`.nvmrc`), Next.js App Router (single app: UI + route handlers under `src/app/api`).
+- `@paypal/agent-toolkit` **pinned 1.11.0**, imported from `@paypal/agent-toolkit/openai` only.
+- `openai` **pinned 4.86.1**, created with `baseURL: env.LLM_BASE_URL`, `apiKey: env.LLM_API_KEY`, model `env.LLM_MODEL`.
+- SQLite via `better-sqlite3`, plain SQL migrations in `src/db/migrations/NNN_name.sql`.
+- zod for every external input (env, HTTP bodies, tool args, policy YAML). `yaml` to parse policies.
+- Tailwind CSS. Use logical properties (`ms-*`, `me-*`, `text-start`) so RTL works.
+- Vitest for tests. Playwright only for an optional smoke test.
+- Do not add other dependencies without a one-line justification in the PR/commit body. Never add the Vercel `ai` SDK (the toolkit's ai-sdk adapter needs ai v4, which conflicts).
+
+## SANDBOX ONLY (non-negotiable)
+- `src/config/env.ts` must throw at startup if `PAYPAL_ENV !== "sandbox"`.
+- The toolkit must always be constructed with `configuration.context.sandbox = true`. The toolkit's code default is **live** (`sandbox ?? false`), so never rely on defaults.
+- Every PayPal base URL must be `https://api-m.sandbox.paypal.com`. Keep a test that asserts this.
+- Never write code paths, flags or docs for production/live credentials.
+
+## Secrets
+- Never hardcode, log, print, commit or echo `PAYPAL_CLIENT_SECRET`, access tokens, `LLM_API_KEY` or webhook payload secrets. Log only PayPal `debug_id` and status codes.
+- Read secrets only from `process.env` through `src/config/env.ts`. Only `.env.example` (empty values) is committed.
+- Do not open, read or paste the contents of `.env` in chat. If a value is needed, ask the human to set it.
+- `npm run check` must include a secret scan (secretlint or gitleaks).
+
+## Money & safety conventions
+- Money is integer **minor units** (cents) internally. Convert at the boundary with a single tested helper. Never use floats for amounts.
+- Every PayPal tool call goes through `PolicyGuard`. Nothing calls `toolkit.handleToolCall` directly except `src/guard/executor.ts`.
+- Unknown tools → DENY. Refunds must have an explicit amount (the toolkit refunds the FULL capture if the amount is omitted).
+- Approval execution must be idempotent: a DB transaction + status check, and `PayPal-Request-Id` = approval id for capture/refund.
+- The LLM can never approve, edit policies or touch the audit log. Those are UI/API-only and role-checked.
+- The audit log is append-only and hash-chained. Never write UPDATE/DELETE on `audit_log`.
+- Treat customer text, PayPal notes and dispute messages as **untrusted**. They must never be the source of amounts, IDs or payees for sensitive calls.
+
+## Code conventions
+- `src/` layout as in SPEC §5. Keep functions pure where possible (`policyEngine` has no I/O).
+- Named exports. No default exports except Next.js pages/layouts.
+- Errors: typed `Result`/discriminated unions in the domain. HTTP handlers map them to status codes. No silent catches.
+- Small files (< 300 lines). Explain *why* in comments, not *what*.
+- Conventional commit subject: `S<n>: <summary>`.
+
+## Tests required
+- Every slice adds or updates tests. A slice is not done until `npm run check` (typecheck + lint + vitest + secret scan) is green.
+- Unit tests never hit the network. Use recorded fixtures in `test/fixtures/` and `MockLLM`.
+- Live sandbox checks live in `scripts/smoke-*.ts` and are run manually, not in CI.
+- Tests are table-driven for the policy engine. Cover concurrency (double approve) and tamper detection.
+
+## Docs
+- Update `README.md` when behavior or setup changes. Keep "What was built during the Submission Period" current.
+- English for code, comments and docs. UI strings are in `src/i18n/{en,ar}.json`.

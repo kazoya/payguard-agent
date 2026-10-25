@@ -1,0 +1,20 @@
+{
+  "plan.refund": "Plan: refund {amount} on capture {target}. PayGuard checks the policy before anything runs.",
+  "plan.fullAmount": "the full amount",
+  "plan.createOrder": "Plan: create a {amount} order for \"{item}\".",
+  "plan.capture": "Plan: capture order {target}.",
+  "ask.refund": "Which capture id should I refund?",
+  "ask.order": "What USD amount should the order be for?",
+  "ask.orderId": "Which order id?",
+  "help": "I can refund a capture, create an order, capture an order, list transactions or disputes, and explain the policy.",
+  "done.refund": "Done. Refunded ${value} (refund {id}, status {status}).",
+  "done.createOrder": "Order {id} created (status {status}). Buyer approval link: {link}",
+  "done.capture": "Order {id} captured (status {status}).",
+  "done.getOrder": "Order {id}: status {status}.",
+  "done.policyHead": "Daily refund cap ${cap}. Rules:",
+  "done.approvalStatus": "Approval {id} is {status}.",
+  "done.list": "Done. {n} result(s).",
+  "pending": "This needs a manager's approval ({reason}). Request {id} is waiting on the Approvals page.",
+  "denied": "Blocked by policy ({rule}): {reason}",
+  "failed": "PayPal returned an error: {code} {message}"
+}

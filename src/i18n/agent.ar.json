@@ -1,0 +1,20 @@
+{
+  "plan.refund": "الخطة: استرداد {amount} من عملية القبض {target}. سيتحقق PayGuard من السياسة قبل التنفيذ.",
+  "plan.fullAmount": "المبلغ كاملاً",
+  "plan.createOrder": "الخطة: إنشاء طلب بقيمة {amount} لـ \"{item}\".",
+  "plan.capture": "الخطة: تحصيل الطلب {target}.",
+  "ask.refund": "أي عملية قبض (capture id) تريد الاسترداد منها؟",
+  "ask.order": "ما المبلغ بالدولار لهذا الطلب؟",
+  "ask.orderId": "ما رقم الطلب (order id)؟",
+  "help": "أستطيع: استرداد مبلغ من عملية قبض، إنشاء طلب، تحصيل طلب، عرض المعاملات أو النزاعات، وشرح السياسة.",
+  "done.refund": "تم. استرداد ${value} (رقم الاسترداد {id}، الحالة {status}).",
+  "done.createOrder": "تم إنشاء الطلب {id} (الحالة {status}). رابط موافقة المشتري: {link}",
+  "done.capture": "تم تحصيل الطلب {id} (الحالة {status}).",
+  "done.getOrder": "الطلب {id}: الحالة {status}.",
+  "done.policyHead": "سقف الاسترداد اليومي ${cap}. القواعد:",
+  "done.approvalStatus": "طلب الموافقة {id} حالته {status}.",
+  "done.list": "تم. عدد النتائج: {n}.",
+  "pending": "هذا يحتاج موافقة مدير ({reason}). رقم الطلب {id} بانتظار القرار في صفحة الموافقات.",
+  "denied": "تم الرفض بواسطة السياسة ({rule}): {reason}",
+  "failed": "أعاد PayPal خطأ: {code} {message}"
+}

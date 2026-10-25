@@ -1,0 +1,57 @@
+{
+  "name": "payguard-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Policy-guarded AI finance-ops agent on top of the PayPal sandbox (PayPal AI Hackathon).",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20 <21 || >=22"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "dev:mock": "node scripts/dev-mock.mjs",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src test scripts eval",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "secretscan": "secretlint \"**/*\"",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run secretscan",
+    "smoke:oauth": "tsx --env-file=.env scripts/smoke-oauth.ts",
+    "smoke:order": "tsx --env-file=.env scripts/smoke-order.ts",
+    "eval": "tsx eval/run.ts",
+    "demo:tamper": "tsx scripts/demo-tamper.ts",
+    "seed": "tsx scripts/seed.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@secretlint/secretlint-rule-preset-recommend": "12.0.0",
+    "@tailwindcss/postcss": "4.3.3",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "20.19.43",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "9.39.5",
+    "jsdom": "26.1.0",
+    "postcss": "8.5.31",
+    "secretlint": "12.0.0",
+    "tailwindcss": "4.3.3",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.0",
+    "vitest": "3.2.7"
+  },
+  "dependencies": {
+    "@paypal/agent-toolkit": "1.11.0",
+    "better-sqlite3": "12.11.1",
+    "next": "15.5.28",
+    "openai": "4.86.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "yaml": "2.9.1",
+    "zod": "3.25.76"
+  }
+}

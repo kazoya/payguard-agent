@@ -1,0 +1,72 @@
+# PayGuard default policy (sandbox demo). Rules are evaluated top-down. First match wins. Default: DENY.
+# Amounts are in USD major units here and converted to minor units (cents) on load.
+version: 1
+currency: USD
+timezone: Asia/Amman          # day boundary for daily caps
+approval_ttl_hours: 24
+sensitive_tools: [create_order, pay_order, create_refund, accept_dispute_claim, send_invoice]
+
+limits:
+  daily_refund_cap: 200.00
+  daily_capture_cap: 2000.00
+
+rules:
+  - id: read-only
+    tools: [get_order, get_refund, list_disputes, get_dispute, list_transactions]
+    roles: [clerk, approver, owner]
+    decision: ALLOW
+
+  - id: refund-hard-limit
+    tools: [create_refund]
+    when: { amount_gt: 1000.00 }
+    decision: DENY
+    reason: "Refunds above $1,000 are not allowed through the agent."
+
+  - id: refund-daily-cap
+    tools: [create_refund]
+    when: { daily_refund_total_after_gt: 200.00 }
+    decision: REQUIRE_APPROVAL
+    reason: "Daily refund cap ($200) would be exceeded."
+
+  - id: refund-small
+    tools: [create_refund]
+    roles: [clerk, approver, owner]
+    when: { amount_lte: 50.00 }
+    decision: ALLOW
+
+  - id: refund-large
+    tools: [create_refund]
+    decision: REQUIRE_APPROVAL
+    reason: "Refunds above $50 need a manager."
+
+  - id: order-small
+    tools: [create_order]
+    roles: [clerk, approver, owner]
+    when: { amount_lte: 500.00 }
+    decision: ALLOW
+
+  - id: order-large
+    tools: [create_order]
+    decision: REQUIRE_APPROVAL
+    reason: "Orders above $500 need a manager."
+
+  - id: capture-own-order
+    tools: [pay_order]
+    when: { order_created_by_payguard: true, amount_lte: 500.00 }
+    decision: ALLOW
+
+  - id: capture-other
+    tools: [pay_order]
+    decision: REQUIRE_APPROVAL
+    reason: "Capturing large or external orders needs a manager."
+
+  - id: dispute-accept
+    tools: [accept_dispute_claim]
+    decision: REQUIRE_APPROVAL
+    reason: "Accepting a dispute claim always needs a manager."
+
+# Built-in checks run BEFORE these rules (not configurable):
+#  - unknown tool -> DENY (UNKNOWN_TOOL)
+#  - create_refund without explicit amount -> DENY (AMOUNT_REQUIRED)
+#  - sensitive tool with untrusted provenance -> DENY (UNTRUSTED_SOURCE)
+#  - refund amount > remaining captured amount -> DENY (REFUND_EXCEEDS_CAPTURE)
