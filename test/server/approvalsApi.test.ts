@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { approveApproval, listApprovals, rejectApproval, type ApprovalView } from "@/server/api/approvals";
-import { getChat, postChat } from "@/server/api/chat";
+import { getChat, chatAndWait } from "@/server/api/chat";
 import type { DisplayMessage } from "@/server/chatService";
 import { LARGE, lina, mockRuntime, nour, omar } from "./helpers";
 
@@ -8,7 +8,7 @@ type ChatBody = { conversationId: string; messages: DisplayMessage[] };
 
 async function pending(requester = lina) {
   const ctx = mockRuntime();
-  const chat = (await postChat(ctx.rt, requester, { text: LARGE })).body as ChatBody;
+  const chat = (await chatAndWait(ctx.rt, requester, { text: LARGE })).body as ChatBody;
   const id = chat.messages.at(-1)!.cards[0]!.approvalId!;
   return { ...ctx, id, conversationId: chat.conversationId };
 }

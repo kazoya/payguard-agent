@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { exportAudit, listAudit, verifyAudit } from "@/server/api/audit";
-import { postChat } from "@/server/api/chat";
+import { chatAndWait } from "@/server/api/chat";
 import { postSession } from "@/server/api/session";
 import { actorFromCookieHeader } from "@/server/users";
 import { INJECTION, lina, mockRuntime, SMALL } from "./helpers";
@@ -8,8 +8,8 @@ import { INJECTION, lina, mockRuntime, SMALL } from "./helpers";
 describe("audit API", () => {
   it("lists newest first, verifies the chain and exports JSON/CSV", async () => {
     const { rt } = mockRuntime();
-    await postChat(rt, lina, { text: SMALL });
-    await postChat(rt, lina, { text: INJECTION });
+    await chatAndWait(rt, lina, { text: SMALL });
+    await chatAndWait(rt, lina, { text: INJECTION });
     const list = listAudit(rt, null).body as { total: number; rows: { seq: number; event: string }[] };
     expect(list.total).toBeGreaterThanOrEqual(2);
     expect(list.rows[0]!.seq).toBeGreaterThan(list.rows.at(-1)!.seq);
@@ -29,7 +29,7 @@ describe("audit API", () => {
 
   it("detects tampering through the verify endpoint", async () => {
     const { rt } = mockRuntime();
-    await postChat(rt, lina, { text: SMALL });
+    await chatAndWait(rt, lina, { text: SMALL });
     expect(() => rt.db.prepare("UPDATE audit_log SET actor = 'x' WHERE seq = 1").run()).toThrow(/append-only/);
     rt.db.exec("DROP TRIGGER audit_log_no_update"); // simulate an attacker with raw DB access
     rt.db.prepare("UPDATE audit_log SET actor = 'mallory' WHERE seq = 1").run();

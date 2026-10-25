@@ -145,6 +145,8 @@ Step-by-step instructions, including Windows notes, are in [`docs/SETUP_KEYS_AND
 
 In sandbox mode the database is a SQLite file at `DATABASE_PATH` (default `./data/payguard.db`).
 
+**Chat turns are asynchronous.** A local model can take one to three minutes per turn, and tunnels such as Cloudflare quick tunnels cut HTTP requests after about 100 seconds. So `POST /api/chat` only validates the message, stores it and returns `202` with a `turnId`. The agent runs in the background on the server. The page polls `GET /api/chat/turns/:id` every 1.5 seconds and shows a "Checking… Ns" indicator until the turn is `done` or `error`. Turn status is stored in SQLite (`chat_turns`), so reloading the page resumes the wait. Each conversation runs one turn at a time; a second message gets `409`. On restart, turns left pending are marked as errors. If a turn fails, the page says that actions may already have run and links the Audit log and Approvals. Audit logging is unchanged.
+
 ## Tests and evaluation
 
 ```bash
@@ -169,7 +171,7 @@ Unit tests never touch the network: PayPal and the LLM are replaced by mocks. Th
 The eval suite replays scenarios through the chat API and checks the selected tool, the policy decision, the rule id, whether PayPal was actually called, the reply language, and that the audit chain is still valid afterwards.
 
 Current results:
-- 330 tests in 28 files pass.
+- 349 tests in 30 files pass.
 - Eval passes 22/22.
 - A clean-machine run (fresh copy without `node_modules`, then `npm ci`, build, test and eval) passed on Oct 24, 2026 with Node 20.19.2 and npm 11.21.1: 210/210 tests, 22/22 eval scenarios, build, typecheck and lint all green.
 
@@ -177,7 +179,7 @@ Current results:
 
 | Criterion | Where to look |
 |---|---|
-| **Technological Implementation**: thorough, skillful use of the PayPal Developer Platform and AI | The Agent Toolkit drives the real sandbox APIs for Orders, Payments/Refunds, Transaction Search, Disputes and Webhooks, with idempotent request ids and signature-verified webhooks. A tool-calling LLM sits behind a deterministic guard. The repo has 330 tests and 37 eval scenarios. |
+| **Technological Implementation**: thorough, skillful use of the PayPal Developer Platform and AI | The Agent Toolkit drives the real sandbox APIs for Orders, Payments/Refunds, Transaction Search, Disputes and Webhooks, with idempotent request ids and signature-verified webhooks. A tool-calling LLM sits behind a deterministic guard. The repo has 349 tests and 37 eval scenarios. |
 | **Design**: a complete, coherent product, not a proof of concept | Three connected screens (chat with plan cards, approvals, audit) cover roles, empty, loading and error states. The UI is fully bilingual, with Arabic RTL and localized policy reasons. Mock mode and seed data make it usable in one command. |
 | **Potential Impact**: a credible, specific problem for a real audience | Small merchants with shared PayPal access. Clerks get speed, owners keep control, and bookkeepers get a verifiable trail. It works in the staff's own language. |
 | **Innovation / Idea**: different from existing concepts | Most payment agents trust the model. PayGuard treats it as an untrusted planner. The design combines policy-as-code, a provenance check against prompt injection, exactly-once human approval and a hash-chained audit, wrapped around the official toolkit. |

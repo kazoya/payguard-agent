@@ -9,6 +9,7 @@ import { systemClock, type Clock } from "@/lib/clock";
 import { parseMoneyToMinor } from "@/lib/money";
 import { MockPayPal } from "@/paypal/mockPayPal";
 import { toolkitHandlerFactory } from "@/paypal/toolkit";
+import { failStaleTurns } from "./chatTurns";
 import { createPayGuard, type PayGuard } from "./container";
 import { DEMO_USERS } from "./users";
 
@@ -22,6 +23,8 @@ export type Runtime = PayGuard & {
   mode: { paypal: "mock" | "sandbox"; llm: "demo" | "openai" };
   mockPayPal: MockPayPal | null;
   env: Env | null;
+  /** Background agent turns running in this process, by turn id (see server/api/chat.ts). */
+  turnTasks: Map<string, Promise<void>>;
 };
 
 export const DEFAULT_POLICY_FILE = path.resolve(process.cwd(), "policies/default.policy.yaml");
@@ -56,7 +59,7 @@ export function buildMockRuntime(opts: { clock?: Clock; policy?: Policy; migrati
   }
   return {
     ...pg, db, clock, llm: new DemoLLM(), paypalTools: paypal.handler().getTools(),
-    mode: { paypal: "mock", llm: "demo" }, mockPayPal: paypal, env: null,
+    mode: { paypal: "mock", llm: "demo" }, mockPayPal: paypal, env: null, turnTasks: new Map(),
   };
 }
 
@@ -65,12 +68,14 @@ export function buildSandboxRuntime(env: Env): Runtime {
   const factory = toolkitHandlerFactory(requirePayPalCredentials(env));
   const pg = createPayGuard({ db, policy: loadPolicyFile(DEFAULT_POLICY_FILE), handlerFactory: factory, clock: systemClock });
   seedUsers(db);
+  const stale = failStaleTurns(db, systemClock);
+  if (stale > 0) console.warn(`[payguard] marked ${stale} chat turn(s) left pending by a previous server process as error`);
   const hasLlm = Boolean(env.LLM_BASE_URL && env.LLM_MODEL);
   return {
     ...pg, db, clock: systemClock,
     llm: hasLlm ? createOpenAiLlm(requireLlmConfig(env)) : new DemoLLM(),
     paypalTools: factory({}).getTools(),
-    mode: { paypal: "sandbox", llm: hasLlm ? "openai" : "demo" }, mockPayPal: null, env,
+    mode: { paypal: "sandbox", llm: hasLlm ? "openai" : "demo" }, mockPayPal: null, env, turnTasks: new Map(),
   };
 }
 

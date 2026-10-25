@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildMockRuntime } from "@/server/runtime";
-import { postChat } from "@/server/api/chat";
+import { chatAndWait } from "@/server/api/chat";
 import { loadSeedScript, seedDemo } from "@/server/seed";
 import { DEMO_USERS } from "@/server/users";
 
@@ -20,7 +20,7 @@ describe("demo seed", () => {
     await seedDemo(rt);
     const user = DEMO_USERS[0]!;
     const ask = async (text: string) => {
-      const res = await postChat(rt, user, { text, lang: "en" });
+      const res = await chatAndWait(rt, user, { text, lang: "en" });
       const body = res.body as { messages: { role: string; text: string }[] };
       return body.messages.at(-1)!.text;
     };

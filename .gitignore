@@ -25,3 +25,6 @@ _private/
 
 # dev server stderr
 *.err
+
+# local DB backups
+data/backup/

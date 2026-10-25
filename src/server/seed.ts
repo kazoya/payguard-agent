@@ -3,7 +3,7 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import { approveApproval, rejectApproval } from "./api/approvals";
-import { postChat } from "./api/chat";
+import { chatAndWait } from "./api/chat";
 import type { DisplayCard, DisplayMessage } from "./chatService";
 import type { Runtime } from "./runtime";
 import { userById, type DemoUser } from "./users";
@@ -51,7 +51,7 @@ export async function seedDemo(rt: Runtime, script: SeedScript = loadSeedScript(
     let conversationId: string | undefined;
     for (const turn of conv.turns) {
       turns += 1;
-      const res = await postChat(rt, user, { text: turn.text, lang: conv.lang, ...(conversationId ? { conversationId } : {}) });
+      const res = await chatAndWait(rt, user, { text: turn.text, lang: conv.lang, ...(conversationId ? { conversationId } : {}) });
       if (res.status !== 200) { mismatches.push(`turn ${turns}: chat failed (${res.status})`); continue; }
       const body = res.body as { conversationId: string; messages: DisplayMessage[] };
       conversationId = body.conversationId;

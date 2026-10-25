@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { ChatCompletionMessage } from "openai/resources/chat/completions";
 import { MockLLM } from "@/agent/llm";
 import { approveApproval, rejectApproval } from "@/server/api/approvals";
-import { postChat } from "@/server/api/chat";
+import { chatAndWait } from "@/server/api/chat";
 import type { DisplayCard, DisplayMessage } from "@/server/chatService";
 import { buildMockRuntime, type Runtime } from "@/server/runtime";
 import { DEMO_USERS, type DemoUser } from "@/server/users";
@@ -121,14 +121,14 @@ export async function runScenario(s: Scenario, file = ""): Promise<ScenarioResul
   let conversationId: string | undefined;
 
   for (const text of s.before) {
-    const r = await postChat(rt, user, { conversationId, text });
+    const r = await chatAndWait(rt, user, { conversationId, text });
     conversationId = (r.body as { conversationId: string }).conversationId;
   }
   if (s.llm_script) rt.llm = new MockLLM(s.llm_script.map(toMessage));
   const callsBefore = rt.mockPayPal!.calls.length;
   const auditFrom = rt.audit.all().length;
   const text = s.customer_message ? `${s.user}\n<customer_message>${s.customer_message}</customer_message>` : s.user;
-  const res = await postChat(rt, user, { conversationId, text });
+  const res = await chatAndWait(rt, user, { conversationId, text });
   const msgs = (res.body as { messages?: DisplayMessage[] }).messages ?? [];
   const last = msgs.filter((m) => m.role === "assistant").at(-1);
   const card: DisplayCard | undefined = last?.cards[0];
