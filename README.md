@@ -36,7 +36,7 @@ PayGuard keeps the convenience of "just ask the assistant" and adds the controls
 |---|---|
 | **Tool-calling LLM** (any OpenAI-compatible endpoint: OpenAI, a local Ollama model, and others) | Understands the request in English or Arabic, picks a toolkit tool and fills its arguments, then explains the outcome in the user's language. It runs for up to 6 steps per turn. |
 | **Guardrails around the model** | The model cannot approve anything, cannot write to the audit log, and cannot use amounts or ids that appear only inside `<customer_message>` blocks (provenance check). The guard is deterministic code, not a prompt. |
-| **Offline demo model** | A scripted bilingual `DemoLLM` makes the whole product run with no API keys. Judges can try it in one command, and the 32 eval scenarios are deterministic. |
+| **Offline demo model** | A scripted bilingual `DemoLLM` makes the whole product run with no API keys. Judges can try it in one command, and the 37 eval scenarios are deterministic. |
 | **Local-model tolerant** | Open-weight models often send stringified or Python-literal arguments, or write tool calls as text (Qwen XML or `<tool_call>` JSON). PayGuard normalizes arguments with a strict non-eval parser, recovers text tool calls for allowlisted tools only, and runs both through the same guard, policy, and approval path. |
 
 ## Architecture
@@ -141,7 +141,7 @@ Step-by-step instructions, including Windows notes, are in [`docs/SETUP_KEYS_AND
    ```
    Any OpenAI-compatible endpoint with tool calling works the same way.
 5. **Start the app.** Run `npm run dev` and open http://localhost:3000. http://localhost:3000/api/health should report `"mode":"sandbox"`, `"paypalConfigured":true` and `"llm":"openai-compatible"` (it never shows values).
-6. **Webhooks (optional).** Expose port 3000 with a tunnel. In the Dashboard, add a webhook pointing to `https://<tunnel>/api/webhooks/paypal`, then put its id in `PAYPAL_WEBHOOK_ID`.
+6. **Webhooks (optional).** Expose port 3000 with a tunnel (for example `cloudflared tunnel --url http://localhost:3000`). Run `npm run webhook:setup -- https://<tunnel>` to create the sandbox webhook (or add it in the Dashboard), put the printed id in `PAYPAL_WEBHOOK_ID` and restart. `npm run webhook:simulate -- PAYMENT.CAPTURE.COMPLETED` asks PayPal to send a test event; it should arrive verified and appear in the audit log.
 
 In sandbox mode the database is a SQLite file at `DATABASE_PATH` (default `./data/payguard.db`).
 
@@ -169,7 +169,7 @@ Unit tests never touch the network: PayPal and the LLM are replaced by mocks. Th
 The eval suite replays scenarios through the chat API and checks the selected tool, the policy decision, the rule id, whether PayPal was actually called, the reply language, and that the audit chain is still valid afterwards.
 
 Current results:
-- 210 tests in 23 files pass.
+- 330 tests in 28 files pass.
 - Eval passes 22/22.
 - A clean-machine run (fresh copy without `node_modules`, then `npm ci`, build, test and eval) passed on Oct 24, 2026 with Node 20.19.2 and npm 11.21.1: 210/210 tests, 22/22 eval scenarios, build, typecheck and lint all green.
 
@@ -177,7 +177,7 @@ Current results:
 
 | Criterion | Where to look |
 |---|---|
-| **Technological Implementation**: thorough, skillful use of the PayPal Developer Platform and AI | The Agent Toolkit drives the real sandbox APIs for Orders, Payments/Refunds, Transaction Search, Disputes and Webhooks, with idempotent request ids and signature-verified webhooks. A tool-calling LLM sits behind a deterministic guard. The repo has 210 tests and 22 eval scenarios. |
+| **Technological Implementation**: thorough, skillful use of the PayPal Developer Platform and AI | The Agent Toolkit drives the real sandbox APIs for Orders, Payments/Refunds, Transaction Search, Disputes and Webhooks, with idempotent request ids and signature-verified webhooks. A tool-calling LLM sits behind a deterministic guard. The repo has 330 tests and 37 eval scenarios. |
 | **Design**: a complete, coherent product, not a proof of concept | Three connected screens (chat with plan cards, approvals, audit) cover roles, empty, loading and error states. The UI is fully bilingual, with Arabic RTL and localized policy reasons. Mock mode and seed data make it usable in one command. |
 | **Potential Impact**: a credible, specific problem for a real audience | Small merchants with shared PayPal access. Clerks get speed, owners keep control, and bookkeepers get a verifiable trail. It works in the staff's own language. |
 | **Innovation / Idea**: different from existing concepts | Most payment agents trust the model. PayGuard treats it as an untrusted planner. The design combines policy-as-code, a provenance check against prompt injection, exactly-once human approval and a hash-chained audit, wrapped around the official toolkit. |

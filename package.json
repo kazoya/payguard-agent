@@ -22,7 +22,9 @@
     "smoke:order": "tsx --env-file=.env scripts/smoke-order.ts",
     "eval": "tsx eval/run.ts",
     "demo:tamper": "tsx scripts/demo-tamper.ts",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "webhook:setup": "tsx --env-file=.env scripts/webhook-setup.ts",
+    "webhook:simulate": "tsx --env-file=.env scripts/webhook-simulate.ts"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
