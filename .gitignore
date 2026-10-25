@@ -22,3 +22,6 @@ eval/reports/*.json
 
 # Private planning notes, drafts and saved rules (not part of the public repo)
 _private/
+
+# dev server stderr
+*.err
