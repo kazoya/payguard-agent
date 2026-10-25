@@ -9,7 +9,7 @@ import { err, ok, type Result } from "@/lib/result";
 
 export type MoneyFacts = { amountMinor: number | null; currency: string | null };
 
-const RefundArgs = z
+export const RefundArgs = z
   .object({
     capture_id: z.string().min(1),
     amount: z.object({ currency_code: z.string(), value: z.string() }).optional(),
@@ -18,13 +18,15 @@ const RefundArgs = z
 
 const OrderItem = z
   .object({
+    name: z.string().min(1).max(127),
     itemCost: z.number().nonnegative(),
+    itemTotal: z.number().nonnegative(),
     quantity: z.number().int().positive().default(1),
     taxPercent: z.number().nonnegative().max(100).default(0),
   })
   .passthrough();
 
-const OrderArgs = z
+export const OrderArgs = z
   .object({
     currencyCode: z.string(),
     items: z.array(OrderItem).min(1).max(50),

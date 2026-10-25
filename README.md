@@ -36,7 +36,8 @@ PayGuard keeps the convenience of "just ask the assistant" and adds the controls
 |---|---|
 | **Tool-calling LLM** (any OpenAI-compatible endpoint: OpenAI, a local Ollama model, and others) | Understands the request in English or Arabic, picks a toolkit tool and fills its arguments, then explains the outcome in the user's language. It runs for up to 6 steps per turn. |
 | **Guardrails around the model** | The model cannot approve anything, cannot write to the audit log, and cannot use amounts or ids that appear only inside `<customer_message>` blocks (provenance check). The guard is deterministic code, not a prompt. |
-| **Offline demo model** | A scripted bilingual `DemoLLM` makes the whole product run with no API keys. Judges can try it in one command, and the 22 eval scenarios are deterministic. |
+| **Offline demo model** | A scripted bilingual `DemoLLM` makes the whole product run with no API keys. Judges can try it in one command, and the 32 eval scenarios are deterministic. |
+| **Local-model tolerant** | Open-weight models often send stringified or Python-literal arguments, or write tool calls as text (Qwen XML or `<tool_call>` JSON). PayGuard normalizes arguments with a strict non-eval parser, recovers text tool calls for allowlisted tools only, and runs both through the same guard, policy, and approval path. |
 
 ## Architecture
 
@@ -149,7 +150,7 @@ In sandbox mode the database is a SQLite file at `DATABASE_PATH` (default `./dat
 ```bash
 npm run check     # typecheck + lint + unit/integration tests + secret scan
 npm test          # Vitest only
-npm run eval      # 22 end-to-end EN/AR scenarios, prints a table, writes eval/reports/latest.json
+npm run eval      # 32 end-to-end EN/AR scenarios, prints a table, writes eval/reports/latest.json
 npm run build     # production build
 ```
 

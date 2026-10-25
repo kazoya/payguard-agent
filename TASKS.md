@@ -94,6 +94,13 @@ Rules for every slice:
   - [ ] AC4 CI (GitHub Actions) not added yet
   - [x] Internal planning files moved to the gitignored `_private/`
 
+## Fix 1: live-run regressions (local Qwen model via Ollama)
+- [x] Pin better-sqlite3 to 12.11.1 (exact)
+- [x] Normalize stringified arguments before validation (JSON, then a strict non-eval Python-literal parser)
+- [x] INVALID_ARGS feedback to the model: issue paths, a minimal valid example, an argument-type hint; repeated identical calls are flagged
+- [x] Recover tool calls written as text (Qwen XML, `<tool_call>` JSON) for allowlisted tools only, with an echo guard; strip leftover markup from replies
+- [x] Unit tests, orchestrator regressions, and 10 eval scenarios (`eval/scenarios/live-regressions.yaml`) replaying the exact payloads
+
 ## Cut list (if behind schedule, cut in this order)
 1. S15 stretch → skip.
 2. Docker (S13) → document `npm` only.

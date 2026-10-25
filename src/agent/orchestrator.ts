@@ -3,15 +3,20 @@ import type { Actor, ApprovalQueue } from "@/approvals/queue";
 import type { Store } from "@/db/store";
 import type { Policy } from "@/guard/policy";
 import type { GuardOutcome, PolicyGuard } from "@/guard/policyGuard";
+import { invalidArgsFeedback, TOOL_EXAMPLES, ARG_TYPE_HINT } from "@/guard/argFeedback";
+import { normalizeToolArgs, parseRawArgs } from "@/guard/argNormalize";
 import { deriveProvenance, splitTrustedText } from "@/guard/provenance";
 import { minorToDecimalString } from "@/lib/money";
 import type { Llm } from "./llm";
 import { buildPlanCard, type PlanCard } from "./planCard";
 import { LOCAL_TOOL_NAMES, LOCAL_TOOLS, SYSTEM_PROMPT } from "./prompts";
+import { extractTextToolCalls, hasToolMarkup, stripToolMarkup } from "./textToolCalls";
 
 /**
  * One agent turn: LLM -> tool calls -> PolicyGuard -> structured results back to the LLM,
  * at most `maxSteps` LLM calls. The model never executes anything itself.
+ * Six steps leave room for a read, an action and one corrected retry; a repeated identical
+ * invalid call is flagged to the model instead of raising the limit.
  */
 
 export const MAX_STEPS = 6;
@@ -44,6 +49,7 @@ export type AgentTurnResult = {
 };
 
 export const STEP_LIMIT_REPLY = "I stopped after the maximum number of steps for one message. Please check the results above or rephrase.";
+export const MARKUP_ONLY_REPLY = "I could not complete that request. Please rephrase it.";
 
 /** What the model sees for a guarded call: status first, minimal detail, no raw errors. */
 export function toModelResult(o: GuardOutcome): Record<string, unknown> {
@@ -55,7 +61,10 @@ export function toModelResult(o: GuardOutcome): Record<string, unknown> {
     case "pending_approval":
       return { status: "pending_approval", tool: o.tool, approval_id: o.approvalId, rule: o.ruleId, reason: o.reason };
     case "denied":
-      return { status: "denied", tool: o.tool, rule: o.ruleId, reason: o.reason };
+      return {
+        status: "denied", tool: o.tool, rule: o.ruleId, reason: o.reason,
+        ...(o.ruleId === "INVALID_ARGS" ? invalidArgsFeedback(o.tool, o.issues ?? []) : {}),
+      };
   }
 }
 
@@ -87,21 +96,39 @@ export async function runAgentTurn(deps: AgentDeps, input: AgentTurnInput): Prom
   const outcomes: GuardOutcome[] = [];
   const cards: PlanCard[] = [];
 
+  const allowed = new Set([...tools.map((t) => t.function.name), ...LOCAL_TOOL_NAMES]);
+  const conversationInputs = () => `${[...input.history, userMsg].filter((m) => m.role === "user").map(textOf).join("\n")}\n${fetchedText}`;
+  const invalidSeen = new Set<string>();
+
   for (let step = 1; step <= maxSteps; step++) {
     const reply = await deps.llm.complete(messages, tools);
-    const calls = reply.tool_calls ?? [];
+    let calls = reply.tool_calls ?? [];
+    let planText = reply.content ?? null;
     if (calls.length === 0) {
       const content = reply.content ?? "";
-      messages.push({ role: "assistant", content });
-      return { reply: content, messages, outcomes, cards, steps: step, stoppedAtLimit: false };
+      const recovered = extractTextToolCalls(content, allowed, conversationInputs());
+      if (recovered.calls.length === 0) {
+        const clean = stripToolMarkup(content);
+        const final = clean === "" && hasToolMarkup(content) ? MARKUP_ONLY_REPLY : clean;
+        messages.push({ role: "assistant", content: final });
+        return { reply: final, messages, outcomes, cards, steps: step, stoppedAtLimit: false };
+      }
+      // Text tool calls become real tool calls and take the same guard path; the markup is never shown.
+      planText = recovered.rest || null;
+      calls = recovered.calls.map((c, i) => ({ id: `text_${step}_${i + 1}`, type: "function" as const, function: { name: c.name, arguments: JSON.stringify(c.args) } }));
     }
-    messages.push({ role: "assistant", content: reply.content ?? null, tool_calls: calls });
+    messages.push({ role: "assistant", content: planText, tool_calls: calls });
     for (const call of calls) {
-      const result = await dispatch(deps, input.actor, input.conversationId, call.function.name, call.function.arguments, {
+      const { result, args } = await dispatch(deps, input.actor, input.conversationId, call.function.name, call.function.arguments, {
         trustedText, fetchedText, outcomes,
       });
+      if (result.rule === "INVALID_ARGS") {
+        const sig = `${call.function.name}:${JSON.stringify(args)}`;
+        if (invalidSeen.has(sig)) result.repeated = "These exact arguments were already rejected. Fix them as described in issues, or stop and tell the user.";
+        invalidSeen.add(sig);
+      }
       if (!LOCAL_TOOL_NAMES.has(call.function.name)) {
-        cards.push(buildPlanCard({ id: call.id, name: call.function.name, args: parseArgs(call.function.arguments) }, reply.content ?? null, result, deps.store));
+        cards.push(buildPlanCard({ id: call.id, name: call.function.name, args }, planText, result, deps.store));
       }
       const content = JSON.stringify(result);
       if (result.status === "executed") fetchedText += `\n${content}`;
@@ -112,15 +139,6 @@ export async function runAgentTurn(deps: AgentDeps, input: AgentTurnInput): Prom
   return { reply: STEP_LIMIT_REPLY, messages, outcomes, cards, steps: maxSteps, stoppedAtLimit: true };
 }
 
-function parseArgs(raw: string): Record<string, unknown> {
-  try {
-    const v: unknown = JSON.parse(raw || "{}");
-    return typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
-
 async function dispatch(
   deps: AgentDeps,
   actor: Actor,
@@ -128,22 +146,24 @@ async function dispatch(
   name: string,
   rawArgs: string,
   ctx: { trustedText: string; fetchedText: string; outcomes: GuardOutcome[] },
-): Promise<Record<string, unknown>> {
-  let args: Record<string, unknown>;
-  try {
-    const parsed: unknown = JSON.parse(rawArgs || "{}");
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new Error("not an object");
-    args = parsed as Record<string, unknown>;
-  } catch {
-    return { status: "denied", tool: name, rule: "INVALID_ARGS", reason: "Tool arguments must be a JSON object." };
+): Promise<{ result: Record<string, unknown>; args: Record<string, unknown> }> {
+  const parsed = parseRawArgs(rawArgs);
+  if (!parsed) {
+    const result = {
+      status: "denied", tool: name, rule: "INVALID_ARGS", reason: "Tool arguments must be a JSON object.",
+      ...(TOOL_EXAMPLES[name] ? { example: TOOL_EXAMPLES[name] } : {}), hint: ARG_TYPE_HINT,
+    };
+    return { result, args: {} };
   }
+  const { args, notes } = normalizeToolArgs(name, parsed);
 
   if (LOCAL_TOOL_NAMES.has(name)) {
-    if (name === "explain_policy") return { status: "executed", tool: name, data: policySummary(deps.policy) };
+    if (name === "explain_policy") return { result: { status: "executed", tool: name, data: policySummary(deps.policy) }, args };
     const row = deps.approvals.get(String(args.approval_id ?? ""));
-    return row
+    const result = row
       ? { status: "executed", tool: name, data: { approval_id: row.id, status: row.status, tool: row.tool, reason: row.reason } }
       : { status: "failed", tool: name, error: { code: "NOT_FOUND", message: "No approval with that id." } };
+    return { result, args };
   }
 
   const provenance = deriveProvenance(name, args, {
@@ -152,7 +172,7 @@ async function dispatch(
     isKnownObject: (id) => deps.store.getObject(id) !== undefined,
     knownAmountsMinor: deps.store.knownAmountsMinor(),
   });
-  const outcome = await deps.guard.handle({ actor, conversationId, tool: name, args, provenance });
+  const outcome = await deps.guard.handle({ actor, conversationId, tool: name, args, provenance, normalized: notes });
   ctx.outcomes.push(outcome);
-  return toModelResult(outcome);
+  return { result: toModelResult(outcome), args };
 }

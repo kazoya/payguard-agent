@@ -2,6 +2,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
+import type { ChatCompletionMessage } from "openai/resources/chat/completions";
+import { MockLLM } from "@/agent/llm";
 import { approveApproval, rejectApproval } from "@/server/api/approvals";
 import { postChat } from "@/server/api/chat";
 import type { DisplayCard, DisplayMessage } from "@/server/chatService";
@@ -25,8 +27,20 @@ const Expect = z.object({
   tool_executed: z.boolean().optional(),
   no_tool: z.boolean().optional(),
   reply_matches: z.string().optional(),
+  reply_not_matches: z.string().optional(),
 });
 type ExpectT = z.infer<typeof Expect>;
+
+/** A recorded model reply: a raw tool call (arguments exactly as the model sent them) or plain text. */
+const ScriptStep = z.union([
+  z.object({ tool: z.string().min(1), arguments: z.string() }).strict(),
+  z.object({ text: z.string() }).strict(),
+]);
+
+function toMessage(step: z.infer<typeof ScriptStep>, i: number): ChatCompletionMessage {
+  if ("text" in step) return MockLLM.text(step.text);
+  return { role: "assistant", content: null, refusal: null, tool_calls: [{ id: `script_${i}`, type: "function", function: { name: step.tool, arguments: step.arguments } }] };
+}
 
 const Then = z.object({
   as: Role,
@@ -43,6 +57,8 @@ export const ScenarioSchema = z.object({
   before: z.array(z.string()).default([]),
   user: z.string().min(1),
   customer_message: z.string().optional(),
+  /** Replays recorded model output for the main turn instead of the demo LLM (live-run regressions). */
+  llm_script: z.array(ScriptStep).optional(),
   expect: Expect.extend({ any_of: z.array(Expect).optional() }),
   then: z.array(Then).default([]),
 });
@@ -93,6 +109,7 @@ function check(e: ExpectT, o: Observed): string[] {
   cmp("tool_executed", e.tool_executed, o.toolExecuted);
   if (e.no_tool && o.cards > 0) f.push(`no_tool: got ${o.cards} card(s)`);
   if (e.reply_matches && !new RegExp(e.reply_matches, "i").test(o.reply)) f.push(`reply_matches /${e.reply_matches}/ failed`);
+  if (e.reply_not_matches && new RegExp(e.reply_not_matches, "i").test(o.reply)) f.push(`reply_not_matches /${e.reply_not_matches}/ failed`);
   return f;
 }
 
@@ -107,6 +124,7 @@ export async function runScenario(s: Scenario, file = ""): Promise<ScenarioResul
     const r = await postChat(rt, user, { conversationId, text });
     conversationId = (r.body as { conversationId: string }).conversationId;
   }
+  if (s.llm_script) rt.llm = new MockLLM(s.llm_script.map(toMessage));
   const callsBefore = rt.mockPayPal!.calls.length;
   const auditFrom = rt.audit.all().length;
   const text = s.customer_message ? `${s.user}\n<customer_message>${s.customer_message}</customer_message>` : s.user;

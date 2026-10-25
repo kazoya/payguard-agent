@@ -8,6 +8,7 @@ import type { ExecError } from "./executor";
 import type { Policy } from "./policy";
 import { evaluate, type CallFacts, type Provenance } from "./policyEngine";
 import type { ActionRunner } from "./runner";
+import { describeArgIssues } from "./argFeedback";
 import { extractCaptureId, extractMoneyFacts, extractOrderId } from "./toolArgs";
 
 /**
@@ -22,13 +23,15 @@ export type GuardRequest = {
   tool: string;
   args: Record<string, unknown>;
   provenance: Provenance;
+  /** Changes made by argument normalization before the guard saw the call (audited). */
+  normalized?: string[];
 };
 
 export type GuardOutcome =
   | { status: "executed"; tool: string; requestId: string; data: unknown }
   | { status: "failed"; tool: string; requestId: string; error: ExecError }
   | { status: "pending_approval"; tool: string; approvalId: string; ruleId: string; reason: string }
-  | { status: "denied"; tool: string; ruleId: string; reason: string };
+  | { status: "denied"; tool: string; ruleId: string; reason: string; issues?: string[] };
 
 export type GuardDeps = {
   policy: Policy;
@@ -45,12 +48,15 @@ export class PolicyGuard {
   async handle(req: GuardRequest): Promise<GuardOutcome> {
     const { policy, audit, runner, approvals } = this.deps;
     const inputHash = hashJson({ tool: req.tool, args: req.args });
-    audit.append({ actor: req.actor.id, event: "PROPOSED", tool: req.tool, inputHash, detail: { args: req.args, provenance: req.provenance } });
+    audit.append({ actor: req.actor.id, event: "PROPOSED", tool: req.tool, inputHash, detail: { args: req.args, provenance: req.provenance, ...(req.normalized?.length ? { normalized: req.normalized } : {}) } });
 
     const money = extractMoneyFacts(req.tool, req.args);
     if (!money.ok) {
-      audit.append({ actor: req.actor.id, event: "DENIED", tool: req.tool, decision: "DENY", inputHash, detail: { ruleId: "INVALID_ARGS", reason: money.error } });
-      return { status: "denied", tool: req.tool, ruleId: "INVALID_ARGS", reason: money.error };
+      // Short reason for the UI and audit; the detailed issues go back to the model so it can self-correct.
+      const reason = `${req.tool} arguments are invalid`;
+      const issues = describeArgIssues(req.tool, req.args);
+      audit.append({ actor: req.actor.id, event: "DENIED", tool: req.tool, decision: "DENY", inputHash, detail: { ruleId: "INVALID_ARGS", reason, issues } });
+      return { status: "denied", tool: req.tool, ruleId: "INVALID_ARGS", reason, issues };
     }
 
     const facts = this.gatherFacts(req, money.value.amountMinor, money.value.currency);
