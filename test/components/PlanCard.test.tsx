@@ -61,4 +61,29 @@ describe("<PlanCard> in Arabic", () => {
     expect(screen.getByText(translate("ar", "reason.refund-large"))).toBeTruthy();
     expect(screen.queryByText(base.reason!)).toBeNull();
   });
+
+  it("renders the verified checkout link as a new-tab button with noopener noreferrer", () => {
+    const url = "https://www.sandbox.paypal.com/checkoutnow?token=3FY11740RF298331J";
+    renderCard({ ...base, tool: "create_order", status: "executed", approvalStatus: null, approvalId: null, resultId: "3FY11740RF298331J", paypalStatus: "PAYER_ACTION_REQUIRED", checkoutUrl: url } as DisplayCard);
+    const link = screen.getByTestId("checkout-link");
+    expect(link.getAttribute("href")).toBe(url);
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(link.textContent).toContain("Open PayPal checkout (sandbox)");
+    expect(screen.getByText("PAYER_ACTION_REQUIRED")).toBeTruthy();
+  });
+
+  it("shows the Arabic button label and the capture id/status after capture", () => {
+    renderCard({ ...base, tool: "pay_order", status: "executed", approvalStatus: null, approvalId: null, resultId: "3FY11740RF298331J", paypalStatus: "COMPLETED", captureId: "CAP123", checkoutUrl: null } as DisplayCard, "ar");
+    expect(screen.queryByTestId("checkout-link")).toBeNull();
+    expect(screen.getByText("CAP123")).toBeTruthy();
+    expect(screen.getByText("COMPLETED")).toBeTruthy();
+    expect(screen.getByText(translate("ar", "card.capture"))).toBeTruthy();
+  });
+
+  it("has no button for cards without a link (including cards stored before this field existed)", () => {
+    renderCard(base);
+    expect(screen.queryByTestId("checkout-link")).toBeNull();
+  });
 });
+

@@ -1,4 +1,5 @@
 import { extractMoneyFacts } from "./toolArgs";
+import { unwrapToolkitData } from "@/paypal/checkout";
 import { isAllowedTool } from "@/paypal/toolkit";
 import type { ToolCallHandlerFactory } from "@/paypal/types";
 import { err, ok, type Result } from "@/lib/result";
@@ -12,7 +13,12 @@ export type ExecRequest = { tool: string; args: Record<string, unknown>; request
 
 export type ExecErrorCode = "TOOL_NOT_ALLOWED" | "AMOUNT_REQUIRED" | "CURRENCY_NOT_USD" | "INVALID_ARGS" | "PAYPAL_ERROR";
 export type ExecError = { code: ExecErrorCode; message: string; status?: number };
-export type ExecSuccess = { data: unknown; raw: string };
+export type ExecSuccess = {
+  data: unknown;
+  raw: string;
+  /** Verified buyer approval link (sandbox checkout host only); set by the runner for orders awaiting the buyer. */
+  checkoutUrl?: string | null;
+};
 
 export type Executor = { execute(req: ExecRequest): Promise<Result<ExecSuccess, ExecError>> };
 
@@ -46,13 +52,13 @@ export function createExecutor(handlerFactory: ToolCallHandlerFactory): Executor
         function: { name: req.tool, arguments: JSON.stringify(req.args) },
       });
       const raw = typeof message.content === "string" ? message.content : JSON.stringify(message.content);
-      return interpretToolkitResponse(raw);
+      return interpretToolkitResponse(raw, req.tool);
     },
   };
 }
 
 /** The toolkit never throws; it returns JSON with `error` or `{ok:false,...}` on failure. */
-export function interpretToolkitResponse(raw: string): Result<ExecSuccess, ExecError> {
+export function interpretToolkitResponse(raw: string, tool?: string): Result<ExecSuccess, ExecError> {
   let data: unknown;
   try {
     data = JSON.parse(raw);
@@ -66,5 +72,8 @@ export function interpretToolkitResponse(raw: string): Result<ExecSuccess, ExecE
       return err({ code: "PAYPAL_ERROR", message, ...(typeof o.status === "number" ? { status: o.status } : {}) });
     }
   }
-  return ok({ data, raw });
+  // pay_order comes back wrapped as {status, response}; downstream code works on the PayPal body.
+  const body = tool ? unwrapToolkitData(tool, data) : { ok: true as const, data };
+  if (!body.ok) return err({ code: "PAYPAL_ERROR", message: body.message });
+  return ok({ data: body.data, raw });
 }

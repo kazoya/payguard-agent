@@ -47,11 +47,11 @@ export function listApprovals(rt: Runtime, status: string | null): ApiResponse {
 
 const errorResponse = (e: ApprovalError) => apiError(STATUS_BY_CODE[e.code], e.code, e.message);
 
-function noticeFor(rt: Runtime, row: ApprovalRow, user: DemoUser, resultId: string | null): void {
+function noticeFor(rt: Runtime, row: ApprovalRow, user: DemoUser, resultId: string | null, checkoutUrl: string | null = null): void {
   if (!row.conversation_id || (row.status !== "EXECUTED" && row.status !== "FAILED" && row.status !== "REJECTED")) return;
   appendNotice(rt.db, row.conversation_id, {
     approvalId: row.id, status: row.status, tool: row.tool, amountMinor: row.amount_minor, currency: row.currency,
-    decidedBy: user.name, note: row.decision_note, resultId,
+    decidedBy: user.name, note: row.decision_note, resultId, ...(checkoutUrl ? { checkoutUrl } : {}),
   }, rt.clock);
 }
 
@@ -62,7 +62,8 @@ export async function approveApproval(rt: Runtime, user: DemoUser, id: string, b
   if (!r.ok) return errorResponse(r.error);
   const row = rt.approvals.get(id)!;
   const data = r.value.status === "EXECUTED" ? (r.value.result.data as { id?: unknown } | undefined) : undefined;
-  noticeFor(rt, row, user, typeof data?.id === "string" ? data.id : null);
+  const checkoutUrl = r.value.status === "EXECUTED" ? r.value.result.checkoutUrl ?? null : null;
+  noticeFor(rt, row, user, typeof data?.id === "string" ? data.id : null, checkoutUrl);
   return json(200, { approval: toView(row) });
 }
 

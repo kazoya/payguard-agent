@@ -22,6 +22,19 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+/** Opens PayPal's sandbox checkout in a new tab. The URL comes from the verified tool result only. */
+export function CheckoutButton({ url, t }: { url: string; t: T }) {
+  return (
+    <div className="mt-3">
+      <a data-testid="checkout-link" href={url} target="_blank" rel="noopener noreferrer"
+        className="inline-block rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800">
+        {t("card.checkout")} ↗
+      </a>
+      <p className="mt-1 text-xs text-slate-500">{t("card.checkoutHint")}</p>
+    </div>
+  );
+}
+
 const Mono = ({ children }: { children: React.ReactNode }) => (
   <bdi dir="ltr" className="font-mono text-[0.8rem]">{children}</bdi>
 );
@@ -47,6 +60,8 @@ export function PlanCard({ card, lang, t }: { card: DisplayCard; lang: Lang; t: 
         {card.ruleId && <Row label={t("card.rule")}><Mono>{card.ruleId}</Mono></Row>}
         {card.reason && <Row label={t("card.why")}>{reasonText(lang, card.ruleId, card.reason)}</Row>}
         {card.resultId && <Row label={t("card.result")}><Mono>{card.resultId}</Mono></Row>}
+        {card.paypalStatus && <Row label={t("card.paypalStatus")}><Mono>{card.paypalStatus}</Mono></Row>}
+        {card.captureId && <Row label={t("card.capture")}><Mono>{card.captureId}</Mono></Row>}
         {card.error && <Row label={t("card.result")}>{card.error}</Row>}
         {card.approvalId && (
           <Row label={t("card.approval")}>
@@ -54,6 +69,7 @@ export function PlanCard({ card, lang, t }: { card: DisplayCard; lang: Lang; t: 
           </Row>
         )}
       </dl>
+      {card.checkoutUrl && card.status === "executed" && <CheckoutButton url={card.checkoutUrl} t={t} />}
     </article>
   );
 }

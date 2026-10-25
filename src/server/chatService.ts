@@ -19,6 +19,8 @@ export type ApprovalNotice = {
   decidedBy: string;
   note: string | null;
   resultId: string | null;
+  /** Verified buyer approval link for an approved create_order (sandbox checkout host only). */
+  checkoutUrl?: string | null;
 };
 
 export type DisplayCard = PlanCard & { approvalStatus: string | null };

@@ -36,12 +36,15 @@ describe("live regressions: stringified arguments", () => {
     expect(JSON.parse(proposed.detail_json!)).toMatchObject({ normalized: ["items: string -> array"] });
   });
 
-  it("executes the Arabic variant with returnUrl/cancelUrl", async () => {
+  it("executes the Arabic variant and drops the model's returnUrl/cancelUrl", async () => {
     const args = { currencyCode: "USD", items: `[{'name': '${MUG_AR}', 'itemCost': 15.0, 'itemTotal': 15.0, 'quantity': 1}]`, returnUrl: "https://example.com/return", cancelUrl: "https://example.com/cancel" };
     const { h, llm, deps } = setup([rawCall("c1", "create_order", JSON.stringify(args)), MockLLM.text("\u062a\u0645.")]);
     await run(deps, `\u0623\u0646\u0634\u0626 \u0637\u0644\u0628 ${MUG_AR} \u0628\u0633\u0639\u0631 15 \u062f\u0648\u0644\u0627\u0631`);
     expect(lastToolResult(llm, 1)).toMatchObject({ status: "executed" });
-    expect(h.paypal.calls[0]!.args).toMatchObject({ items: [{ name: MUG_AR, itemCost: 15 }], returnUrl: "https://example.com/return" });
+    expect(h.paypal.calls[0]!.args).toMatchObject({ items: [{ name: MUG_AR, itemCost: 15 }] });
+    // Redirect targets are guard-owned: the model cannot point the buyer elsewhere.
+    expect(h.paypal.calls[0]!.args).not.toHaveProperty("returnUrl");
+    expect(h.paypal.calls[0]!.args).not.toHaveProperty("cancelUrl");
   });
 
   it("still applies provenance: a stringified amount not in the user's text is denied", async () => {

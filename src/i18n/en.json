@@ -41,6 +41,10 @@
   "card.why": "Why",
   "card.approval": "Approval",
   "card.result": "Result",
+  "card.paypalStatus": "PayPal status",
+  "card.capture": "Capture",
+  "card.checkout": "Open PayPal checkout (sandbox)",
+  "card.checkoutHint": "The buyer approves the order here with a sandbox buyer account. Then ask the agent to capture the order.",
   "card.fullAmount": "Full remaining amount",
   "card.openApprovals": "Open approvals",
   "status.executed": "Allowed · executed",
@@ -127,5 +131,12 @@
   "error.loadFailed": "Could not load data. Check that the server is running, then refresh.",
   "approvals.emptyPending": "No pending approvals. Large refunds and orders requested in the chat will appear here.",
   "audit.emptyHint": "No audit entries yet. Every chat action is recorded here.",
-  "common.loading": "Loading…"
+  "common.loading": "Loading…",
+  "checkout.returnTitle": "Payment approved by the buyer",
+  "checkout.returnBody": "Go back to the chat and ask the agent to capture order {token}.",
+  "checkout.returnNoToken": "Go back to the chat and ask the agent to capture the order.",
+  "checkout.cancelTitle": "Checkout cancelled",
+  "checkout.cancelBody": "The buyer cancelled PayPal checkout. Nothing was charged. Order {token} stays uncaptured.",
+  "checkout.cancelNoToken": "The buyer cancelled PayPal checkout. Nothing was charged.",
+  "checkout.backToChat": "Back to chat"
 }

@@ -73,12 +73,15 @@ export class MockPayPal {
         const facts = extractMoneyFacts(tool, args);
         const amountMinor = facts.ok && facts.value.amountMinor !== null ? facts.value.amountMinor : 0;
         const id = nextId("MOCKORDER");
-        this.orders.set(id, { id, status: "CREATED", amountMinor });
-        return { id, status: "CREATED", links: [{ rel: "payer-action", href: `https://www.sandbox.paypal.com/checkoutnow?token=${id}` }] };
+        // Toolkit 1.11.0 always sends payment_source.paypal.experience_context, so PayPal answers
+        // PAYER_ACTION_REQUIRED with a rel "payer-action" link (the buyer's checkout page).
+        this.orders.set(id, { id, status: "PAYER_ACTION_REQUIRED", amountMinor });
+        return { id, status: "PAYER_ACTION_REQUIRED", links: mockOrderLinks(id) };
       }
       case "get_order": {
         const o = this.orders.get(String(args.id));
-        return o ? { id: o.id, status: o.status } : { error: { message: "RESOURCE_NOT_FOUND" } };
+        if (!o) return { error: { message: "RESOURCE_NOT_FOUND" } };
+        return o.status === "PAYER_ACTION_REQUIRED" ? { id: o.id, status: o.status, links: mockOrderLinks(o.id) } : { id: o.id, status: o.status };
       }
       case "pay_order": {
         const o = this.orders.get(String(args.id));
@@ -87,7 +90,8 @@ export class MockPayPal {
         const capId = nextId("MOCKCAPTURE");
         this.captures.set(capId, { id: capId, amountMinor: o.amountMinor, refundedMinor: 0, createdAt: this.now() });
         const amount = { currency_code: "USD", value: minorToDecimalString(o.amountMinor) };
-        return { id: o.id, status: "COMPLETED", purchase_units: [{ payments: { captures: [{ id: capId, status: "COMPLETED", amount }] } }] };
+        // Toolkit 1.11.0 captureOrder wraps the PayPal body: { status: "success", response }.
+        return { status: "success", response: { id: o.id, status: "COMPLETED", purchase_units: [{ payments: { captures: [{ id: capId, status: "COMPLETED", amount }] } }] } };
       }
       case "create_refund": {
         const cap = this.captures.get(String(args.capture_id));
@@ -115,4 +119,11 @@ export class MockPayPal {
   refundedMinor(captureId: string): number {
     return this.captures.get(captureId)?.refundedMinor ?? 0;
   }
+}
+
+function mockOrderLinks(id: string) {
+  return [
+    { rel: "self", href: `https://api.sandbox.paypal.com/v2/checkout/orders/${id}`, method: "GET" },
+    { rel: "payer-action", href: `https://www.sandbox.paypal.com/checkoutnow?token=${id}`, method: "GET" },
+  ];
 }

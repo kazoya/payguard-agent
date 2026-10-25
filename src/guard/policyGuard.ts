@@ -31,7 +31,7 @@ export type GuardRequest = {
 };
 
 export type GuardOutcome =
-  | { status: "executed"; tool: string; requestId: string; data: unknown }
+  | { status: "executed"; tool: string; requestId: string; data: unknown; checkoutUrl?: string | null }
   | { status: "failed"; tool: string; requestId: string; error: ExecError }
   | { status: "pending_approval"; tool: string; approvalId: string; ruleId: string; reason: string }
   | { status: "denied"; tool: string; ruleId: string; reason: string; issues?: string[] };
@@ -85,7 +85,7 @@ export class PolicyGuard {
     audit.append({ actor: req.actor.id, event, tool: req.tool, decision: decision.decision, inputHash, detail: { ruleId: decision.ruleId, requestId } });
     const result = await runner.run({ tool: req.tool, args: req.args, requestId, requestedBy: req.actor.id, actor: req.actor.id });
     return result.ok
-      ? { status: "executed", tool: req.tool, requestId, data: result.value.data }
+      ? { status: "executed", tool: req.tool, requestId, data: result.value.data, checkoutUrl: result.value.checkoutUrl ?? null }
       : { status: "failed", tool: req.tool, requestId, error: result.error };
   }
 

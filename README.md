@@ -98,7 +98,8 @@ flowchart LR
 5. **Tamper-evident audit chain.** Every decision, approval, execution and webhook is one row whose SHA-256 hash covers the previous row's hash. SQLite triggers block `UPDATE` and `DELETE`. `/audit` re-verifies the chain in one click. `npm run demo:tamper` edits a row in a copy of the database and shows exactly where the chain breaks.
 6. **Prompt-injection defense.** Customer text is wrapped in `<customer_message>` and treated as untrusted. If an amount or capture id appears only there, the money-moving call is denied with `UNTRUSTED_SOURCE`, whatever the model was convinced to do. The same check works for Arabic-Indic digits. Text pasted inline into the operator's own message (quotes, `«»`, code blocks, `>` quotes, or lines like "Customer note says:") is checked too: if the amount or id of a money-moving call comes only from such a segment and that segment contains override phrases in English or Arabic ("SYSTEM OVERRIDE", "ignore policy", "تجاهل السياسة", …), the guard denies the call with `INJECTION_SUSPECTED`. It is audited, never queued for approval, and the reply tells the operator to restate the action as their own instruction if it is legitimate. This is a deterministic check with no extra LLM call. A quoted note without override phrases goes through normal policy.
 7. **Verified webhooks.** Signatures are checked against PayPal's certificate, which is downloaded only over https from `*.paypal.com`. Duplicate event ids are ignored, and every event is audited.
-8. **No secrets in the repo.** `.env.example` has empty credential values, `.env` is gitignored, `npm run secretscan` runs in `npm run check`, and logs never print tokens.
+8. **Checkout links come from PayPal, not from the model.** The buyer approval link on an order card is taken from the `create_order` / `get_order` response (rel `payer-action` or `approve`) and kept only if it is `https://www.sandbox.paypal.com` or `https://sandbox.paypal.com` (exact host, no port or user info). Anything else is dropped and noted in the audit row. The return and cancel URLs PayPal redirects to are set by the guard, never by the model.
+9. **No secrets in the repo.** `.env.example` has empty credential values, `.env` is gitignored, `npm run secretscan` runs in `npm run check`, and logs never print tokens.
 
 The demo role switcher (clerk / approver / owner) is a cookie, not real authentication. Authorization is still enforced server-side for every request.
 
@@ -147,12 +148,25 @@ In sandbox mode the database is a SQLite file at `DATABASE_PATH` (default `./dat
 
 **Chat turns are asynchronous.** A local model can take one to three minutes per turn, and tunnels such as Cloudflare quick tunnels cut HTTP requests after about 100 seconds. So `POST /api/chat` only validates the message, stores it and returns `202` with a `turnId`. The agent runs in the background on the server. The page polls `GET /api/chat/turns/:id` every 1.5 seconds and shows a "Checking… Ns" indicator until the turn is `done` or `error`. Turn status is stored in SQLite (`chat_turns`), so reloading the page resumes the wait. Each conversation runs one turn at a time; a second message gets `409`. On restart, turns left pending are marked as errors. If a turn fails, the page says that actions may already have run and links the Audit log and Approvals. Audit logging is unchanged.
 
+**Order checkout flow (create → buyer approves → capture).**
+1. The clerk asks for an order. `create_order` runs and PayPal answers `PAYER_ACTION_REQUIRED` with a buyer approval link.
+2. The order card shows an **Open PayPal checkout (sandbox)** button (Arabic label in `src/i18n/ar.json`). It opens in a new tab with `rel="noopener noreferrer"`. The buyer signs in with a sandbox *personal* account and approves.
+3. PayPal redirects the buyer to `${APP_BASE_URL}/checkout/return?token=<order id>`, which says to go back to the chat and ask the agent to capture that order. Cancelling lands on `/checkout/cancel`.
+4. The clerk says "capture order <id>". `pay_order` captures it, and the card shows the capture id and status `COMPLETED`. Refunds then work against that capture.
+
+How the link and URLs are handled:
+- The UI button uses only the link the guard verified (`src/paypal/checkout.ts`). The model receives the same URL as `checkout_url` in the tool result (raw `links` are removed) so its reply can mention it, but the card never takes a link from model text.
+- Agent Toolkit 1.11.0 `create_order` takes `returnUrl` and `cancelUrl` (default `https://example.com/returnUrl`) and puts them in `payment_source.paypal.experience_context`. That is why PayPal answers `PAYER_ACTION_REQUIRED` with a `payer-action` link instead of `CREATED` with `approve`.
+- PayGuard uses those supported parameters; the toolkit is not patched. `ActionRunner` removes any `returnUrl`/`cancelUrl` the model passed and sets them from `APP_BASE_URL`, for both direct and manager-approved orders, and the audit row records it.
+- If `APP_BASE_URL` is empty or not an http(s) URL, the toolkit default is left in place. The buyer can still approve; they just land on example.com afterwards.
+- Toolkit 1.11.0 wraps the `pay_order` (capture) response as `{status: "success" | "error", response}`. The executor unwraps it, so the capture is tracked for later refunds and an `error` envelope becomes a failed action.
+
 ## Tests and evaluation
 
 ```bash
 npm run check     # typecheck + lint + unit/integration tests + secret scan
 npm test          # Vitest only
-npm run eval      # 32 end-to-end EN/AR scenarios, prints a table, writes eval/reports/latest.json
+npm run eval      # 37 end-to-end EN/AR scenarios, prints a table, writes eval/reports/latest.json
 npm run build     # production build
 ```
 
@@ -166,20 +180,21 @@ Unit tests never touch the network: PayPal and the LLM are replaced by mocks. Th
 - webhook signature verification;
 - the API routes;
 - the UI components;
-- i18n key parity.
+- i18n key parity;
+- the checkout link allowlist, guard-owned return/cancel URLs and capture tracking.
 
 The eval suite replays scenarios through the chat API and checks the selected tool, the policy decision, the rule id, whether PayPal was actually called, the reply language, and that the audit chain is still valid afterwards.
 
 Current results:
-- 349 tests in 30 files pass.
-- Eval passes 22/22.
+- 390 tests in 34 files pass.
+- Eval passes 37/37.
 - A clean-machine run (fresh copy without `node_modules`, then `npm ci`, build, test and eval) passed on Oct 24, 2026 with Node 20.19.2 and npm 11.21.1: 210/210 tests, 22/22 eval scenarios, build, typecheck and lint all green.
 
 ## How this maps to the judging criteria
 
 | Criterion | Where to look |
 |---|---|
-| **Technological Implementation**: thorough, skillful use of the PayPal Developer Platform and AI | The Agent Toolkit drives the real sandbox APIs for Orders, Payments/Refunds, Transaction Search, Disputes and Webhooks, with idempotent request ids and signature-verified webhooks. A tool-calling LLM sits behind a deterministic guard. The repo has 349 tests and 37 eval scenarios. |
+| **Technological Implementation**: thorough, skillful use of the PayPal Developer Platform and AI | The Agent Toolkit drives the real sandbox APIs for Orders, Payments/Refunds, Transaction Search, Disputes and Webhooks, with idempotent request ids and signature-verified webhooks. A tool-calling LLM sits behind a deterministic guard. The repo has 390 tests and 37 eval scenarios. |
 | **Design**: a complete, coherent product, not a proof of concept | Three connected screens (chat with plan cards, approvals, audit) cover roles, empty, loading and error states. The UI is fully bilingual, with Arabic RTL and localized policy reasons. Mock mode and seed data make it usable in one command. |
 | **Potential Impact**: a credible, specific problem for a real audience | Small merchants with shared PayPal access. Clerks get speed, owners keep control, and bookkeepers get a verifiable trail. It works in the staff's own language. |
 | **Innovation / Idea**: different from existing concepts | Most payment agents trust the model. PayGuard treats it as an untrusted planner. The design combines policy-as-code, a provenance check against prompt injection, exactly-once human approval and a hash-chained audit, wrapped around the official toolkit. |

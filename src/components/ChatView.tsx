@@ -6,7 +6,7 @@ import { formatMoney } from "@/lib/format";
 import { elapsedSeconds, fetchChat, MAX_WAIT_MS, pollTurn, startTurn, type ActiveTurn, type ChatState } from "./chatClient";
 import type { Lang } from "@/i18n";
 import { useI18n } from "./I18nProvider";
-import { PlanCard } from "./PlanCard";
+import { CheckoutButton, PlanCard } from "./PlanCard";
 import { StatusBadge } from "./StatusBadge";
 
 type T = (key: string, vars?: Record<string, string | number>) => string;
@@ -185,6 +185,7 @@ function Message({ m, lang, t }: { m: DisplayMessage; lang: Lang; t: T }) {
         <span className="text-slate-600">{t(`notice.${n.status}`, { by: n.decidedBy })}</span>
         {n.note && <span className="text-slate-500">“{n.note}”</span>}
         {n.resultId && <bdi dir="ltr" className="font-mono text-xs">{n.resultId}</bdi>}
+        {n.checkoutUrl && <CheckoutButton url={n.checkoutUrl} t={t} />}
       </div>
     );
   }

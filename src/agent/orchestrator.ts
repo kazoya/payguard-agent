@@ -1,4 +1,5 @@
 import type { ChatCompletionMessageParam, ChatCompletionTool } from "openai/resources/chat/completions";
+import { summarizeCapture } from "@/paypal/checkout";
 import type { Actor, ApprovalQueue } from "@/approvals/queue";
 import type { Store } from "@/db/store";
 import type { Policy } from "@/guard/policy";
@@ -68,11 +69,28 @@ export function withInjectionNote(reply: string, outcomes: GuardOutcome[], userT
   return reply.trim() === "" ? note : `${reply}\n\n${note}`;
 }
 
+export const CHECKOUT_MODEL_HINT =
+  "The buyer must approve this order on the PayPal sandbox checkout page. Give the user checkout_url exactly as written (it is also shown as a button on the order card). After the buyer approves, the user asks you to capture the order: call pay_order with this order id. Do not capture before that.";
+
+/** Order data for the model without PayPal's raw HATEOAS links: the one verified link is checkout_url. */
+function modelData(tool: string, data: unknown): unknown {
+  if ((tool !== "create_order" && tool !== "get_order") || !data || typeof data !== "object" || Array.isArray(data)) return data;
+  const { links: _links, ...rest } = data as Record<string, unknown>;
+  return rest;
+}
+
 /** What the model sees for a guarded call: status first, minimal detail, no raw errors. */
 export function toModelResult(o: GuardOutcome): Record<string, unknown> {
   switch (o.status) {
     case "executed":
-      return { status: "executed", tool: o.tool, data: o.data };
+    {
+      const capture = o.tool === "pay_order" ? summarizeCapture(o.data) : null;
+      return {
+        status: "executed", tool: o.tool, data: modelData(o.tool, o.data),
+        ...(o.checkoutUrl ? { checkout_url: o.checkoutUrl, next_step: CHECKOUT_MODEL_HINT } : {}),
+        ...(capture?.captureId ? { capture: { id: capture.captureId, status: capture.captureStatus } } : {}),
+      };
+    }
     case "failed":
       return { status: "failed", tool: o.tool, error: { code: o.error.code, message: o.error.message } };
     case "pending_approval":

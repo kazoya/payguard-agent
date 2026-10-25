@@ -1,4 +1,5 @@
 import path from "node:path";
+import { checkoutUrlsFrom } from "@/paypal/checkout";
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
 import { DemoLLM } from "@/agent/demoLlm";
 import { createOpenAiLlm, type Llm } from "@/agent/llm";
@@ -66,7 +67,10 @@ export function buildMockRuntime(opts: { clock?: Clock; policy?: Policy; migrati
 export function buildSandboxRuntime(env: Env): Runtime {
   const db = openDb(path.resolve(process.cwd(), env.DATABASE_PATH));
   const factory = toolkitHandlerFactory(requirePayPalCredentials(env));
-  const pg = createPayGuard({ db, policy: loadPolicyFile(DEFAULT_POLICY_FILE), handlerFactory: factory, clock: systemClock });
+  const pg = createPayGuard({
+    db, policy: loadPolicyFile(DEFAULT_POLICY_FILE), handlerFactory: factory, clock: systemClock,
+    checkoutUrls: checkoutUrlsFrom(env.APP_BASE_URL),
+  });
   seedUsers(db);
   const stale = failStaleTurns(db, systemClock);
   if (stale > 0) console.warn(`[payguard] marked ${stale} chat turn(s) left pending by a previous server process as error`);

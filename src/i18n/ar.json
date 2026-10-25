@@ -41,6 +41,10 @@
   "card.why": "السبب",
   "card.approval": "طلب الموافقة",
   "card.result": "النتيجة",
+  "card.paypalStatus": "حالة PayPal",
+  "card.capture": "التحصيل",
+  "card.checkout": "فتح صفحة دفع PayPal (تجريبي)",
+  "card.checkoutHint": "يوافق المشتري على الطلب هنا بحساب مشترٍ تجريبي. بعد ذلك اطلب من الوكيل تحصيل الطلب.",
   "card.fullAmount": "كامل المبلغ المتبقي",
   "card.openApprovals": "فتح الموافقات",
   "status.executed": "مسموح · تم التنفيذ",
@@ -127,5 +131,12 @@
   "error.loadFailed": "تعذر تحميل البيانات. تأكد أن الخادم يعمل ثم حدّث الصفحة.",
   "approvals.emptyPending": "لا توجد طلبات موافقة معلقة. ستظهر هنا طلبات الاسترداد والطلبات الكبيرة من المحادثة.",
   "audit.emptyHint": "لا توجد سجلات بعد. كل إجراء في المحادثة يُسجَّل هنا.",
-  "common.loading": "جارٍ التحميل…"
+  "common.loading": "جارٍ التحميل…",
+  "checkout.returnTitle": "وافق المشتري على الدفع",
+  "checkout.returnBody": "ارجع إلى المحادثة واطلب من الوكيل تحصيل الطلب {token}.",
+  "checkout.returnNoToken": "ارجع إلى المحادثة واطلب من الوكيل تحصيل الطلب.",
+  "checkout.cancelTitle": "أُلغي الدفع",
+  "checkout.cancelBody": "ألغى المشتري الدفع عبر PayPal. لم يُخصم أي مبلغ. يبقى الطلب {token} دون تحصيل.",
+  "checkout.cancelNoToken": "ألغى المشتري الدفع عبر PayPal. لم يُخصم أي مبلغ.",
+  "checkout.backToChat": "العودة إلى المحادثة"
 }

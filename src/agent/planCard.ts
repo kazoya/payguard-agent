@@ -1,5 +1,6 @@
 import type { Store } from "@/db/store";
 import { extractCaptureId, extractMoneyFacts, extractOrderId } from "@/guard/toolArgs";
+import { summarizeCapture, verifyCheckoutUrl } from "@/paypal/checkout";
 
 /**
  * A plan card is the UI view of one proposed PayPal action: what, how much, on what, why,
@@ -22,6 +23,12 @@ export type PlanCard = {
   approvalId: string | null;
   resultId: string | null;
   error: string | null;
+  /** PayPal's status of the object (e.g. PAYER_ACTION_REQUIRED, or the capture status for pay_order). */
+  paypalStatus?: string | null;
+  /** Capture id from a pay_order response. */
+  captureId?: string | null;
+  /** Buyer approval link, only from the verified tool result (never from model text). */
+  checkoutUrl?: string | null;
 };
 
 const STATUSES: readonly CardStatus[] = ["executed", "failed", "pending_approval", "denied"];
@@ -50,6 +57,8 @@ export function buildPlanCard(
   const status = STATUSES.includes(result.status as CardStatus) ? (result.status as CardStatus) : "failed";
   const data = (result.data ?? {}) as Record<string, unknown>;
   const error = result.error as { code?: string; message?: string } | undefined;
+  const capture = status === "executed" && call.name === "pay_order" ? summarizeCapture(data) : null;
+  const link = typeof result.checkout_url === "string" ? verifyCheckoutUrl(result.checkout_url) : null;
   return {
     callId: call.id,
     tool: call.name,
@@ -63,5 +72,8 @@ export function buildPlanCard(
     approvalId: str(result.approval_id),
     resultId: str(data.id),
     error: error ? [error.code, error.message].filter(Boolean).join(": ") : null,
+    paypalStatus: status === "executed" ? capture?.captureStatus ?? str(data.status) : null,
+    captureId: capture?.captureId ?? null,
+    checkoutUrl: link?.ok ? link.url : null,
   };
 }

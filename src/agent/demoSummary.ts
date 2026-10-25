@@ -3,7 +3,7 @@ import { say, type Lang } from "./demoText";
 
 /** Turns guarded tool results (orchestrator `toModelResult` JSON) into a short reply. */
 
-type R = { status?: string; tool?: string; data?: unknown; rule?: string; reason?: string; approval_id?: string; error?: { code?: string; message?: string } };
+type R = { status?: string; tool?: string; data?: unknown; checkout_url?: string; capture?: { id?: string; status?: string | null }; rule?: string; reason?: string; approval_id?: string; error?: { code?: string; message?: string } };
 type Obj = Record<string, unknown>;
 
 const obj = (v: unknown): Obj => (typeof v === "object" && v !== null ? (v as Obj) : {});
@@ -15,12 +15,13 @@ function executed(r: R, lang: Lang): string {
     case "create_refund":
       return say(lang, "done.refund", { value: s(obj(d.amount).value), id: s(d.id), status: s(d.status) });
     case "create_order": {
-      const links = Array.isArray(d.links) ? (d.links as { rel: string; href: string }[]) : [];
-      const link = links.find((l) => l.rel === "payer-action" || l.rel === "approve")?.href ?? "-";
-      return say(lang, "done.createOrder", { id: s(d.id), status: s(d.status), link });
+      // Only the verified link the guard returned (never PayPal's raw links or model text).
+      return r.checkout_url
+        ? say(lang, "done.createOrder", { id: s(d.id), status: s(d.status), link: r.checkout_url })
+        : say(lang, "done.createOrderNoLink", { id: s(d.id), status: s(d.status) });
     }
     case "pay_order":
-      return say(lang, "done.capture", { id: s(d.id), status: s(d.status) });
+      return say(lang, "done.capture", { id: s(d.id), status: s(d.status), captureId: s(r.capture?.id) ?? "-", captureStatus: s(r.capture?.status) ?? "-" });
     case "get_order":
       return say(lang, "done.getOrder", { id: s(d.id), status: s(d.status) });
     case "explain_policy": {
