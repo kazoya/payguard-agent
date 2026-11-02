@@ -118,8 +118,11 @@ export const VisitorStateSchema = z.object({
 
 export type VisitorState = z.infer<typeof VisitorStateSchema>;
 
+let _warnedMissingKey = false;
+
 /**
  * Derives a 32-byte key from environment or generates ephemeral key per process.
+ * WARNING: Without PAYGUARD_STATE_KEY, visitor state won't persist across serverless restarts.
  */
 export function getStateKey(): StateKey {
   const env = process.env.PAYGUARD_STATE_KEY;
@@ -128,7 +131,18 @@ export function getStateKey(): StateKey {
     if (buf.length !== 32) throw new Error("PAYGUARD_STATE_KEY must be 32 bytes (64 hex chars)");
     return buf;
   }
-  // Ephemeral: state survives only within this process
+  
+  // Ephemeral key: state survives only within this process lifetime
+  // On serverless (Vercel), this means visitor state is lost on cold starts
+  if (!_warnedMissingKey) {
+    console.warn(
+      "[payguard] PAYGUARD_STATE_KEY not set: using ephemeral per-process key. " +
+      "Visitor state will be lost on serverless restarts. " +
+      "For production, set PAYGUARD_STATE_KEY to a 64-character hex string (32 bytes)."
+    );
+    _warnedMissingKey = true;
+  }
+  
   return randomBytes(32);
 }
 

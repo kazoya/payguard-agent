@@ -134,11 +134,20 @@ Deploy (the repo includes `vercel.json`):
 ```bash
 npm i -g vercel
 vercel link
-vercel env add PAYPAL_ENV production      # value: sandbox (not a secret, required by the sandbox-only guard)
-vercel env add PAYGUARD_MOCK production   # value: 1 (optional, makes the intent explicit)
-vercel deploy                             # preview URL
+vercel env add PAYPAL_ENV production           # value: sandbox (not a secret, required by the sandbox-only guard)
+vercel env add PAYGUARD_MOCK production        # value: 1 (optional, makes the intent explicit)
+vercel env add PAYGUARD_STATE_KEY production   # value: 64 hex chars (32 bytes), REQUIRED for production
+vercel deploy                                  # preview URL
 vercel deploy --prod
 ```
+
+**Important**: `PAYGUARD_STATE_KEY` must be set for production to persist visitor state across serverless instances. Generate one with:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Without this key, each serverless restart generates a new ephemeral key, causing visitor state to be lost on cold starts.
 
 Use Node.js 22 in the Vercel project settings. Do not add PayPal keys to a public demo.
 

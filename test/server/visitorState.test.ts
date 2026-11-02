@@ -59,16 +59,16 @@ describe("visitor state serialization", () => {
     // Export state
     const state = exportState(rt.db);
     expect(state.approvals.length).toBe(1);
-    expect(state.approvals[0].tool).toBe("create_refund");
+    expect(state.approvals[0]?.tool).toBe("create_refund");
     
     // Import into fresh database
     const db2 = openDb(":memory:");
     importState(db2, state);
     
     // Verify import
-    const imported = db2.prepare("SELECT * FROM approvals").all();
+    const imported = db2.prepare("SELECT * FROM approvals").all() as Array<{ tool: string }>;
     expect(imported.length).toBe(1);
-    expect((imported[0] as any).tool).toBe("create_refund");
+    expect(imported[0]?.tool).toBe("create_refund");
     
     db2.close();
   });
@@ -110,9 +110,9 @@ describe("visitor state serialization", () => {
   it("preserves audit chain across instances", () => {
     const rt1 = buildMockRuntime();
     
-    // Generate some audit events
-    rt1.audit.append({ actor: "u_clerk", event: "TEST_EVENT", tool: "test_tool" });
-    rt1.audit.append({ actor: "u_manager", event: "TEST_EVENT_2", tool: "test_tool" });
+    // Generate some audit events using real AuditEvent types
+    rt1.audit.append({ actor: "u_clerk", event: "ALLOWED", tool: "test_tool" });
+    rt1.audit.append({ actor: "u_manager", event: "DENIED", tool: "test_tool" });
     
     // Export and encode
     const state1 = exportState(rt1.db);
@@ -124,10 +124,10 @@ describe("visitor state serialization", () => {
     importState(db2, state2);
     
     // Verify audit chain
-    const audit = db2.prepare("SELECT * FROM audit_log ORDER BY seq").all() as any[];
+    const audit = db2.prepare("SELECT * FROM audit_log ORDER BY seq").all() as Array<{ event: string }>;
     expect(audit.length).toBe(2);
-    expect(audit[0].event).toBe("TEST_EVENT");
-    expect(audit[1].event).toBe("TEST_EVENT_2");
+    expect(audit[0]?.event).toBe("ALLOWED");
+    expect(audit[1]?.event).toBe("DENIED");
     
     db2.close();
   });
@@ -193,7 +193,7 @@ describe("cross-instance approval workflow", () => {
     
     const list = rt2.approvals.list("PENDING");
     expect(list.length).toBe(1);
-    expect(list[0].id).toBe(approval.id);
+    expect(list[0]?.id).toBe(approval.id);
     
     const cookies2 = encodeState(exportState(rt2.db));
     
