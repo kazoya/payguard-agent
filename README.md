@@ -123,6 +123,31 @@ Things to try:
 
 `npm run seed` prints what the seed creates (users, policy rules, approvals by status, audit rows, chain status).
 
+## Hosted demo on Vercel (mock mode, no keys)
+
+Judges can try PayGuard in a browser without any PayPal or LLM keys. Mock mode replaces only the external calls: PayPal becomes a deterministic in-memory mock and the LLM becomes the scripted bilingual demo model. The policy engine, guard, approvals and audit chain are the same code as in sandbox mode. Every page shows a **"Demo mode: simulated"** badge.
+
+Mock mode turns on by itself when `PAYPAL_CLIENT_ID` or `PAYPAL_CLIENT_SECRET` is missing. `PAYGUARD_MOCK=1` forces it on and `PAYGUARD_MOCK=0` forces it off (keys are then required). `/api/health` reports `"mode":"mock","simulated":true`.
+
+Deploy (the repo includes `vercel.json`):
+
+```bash
+npm i -g vercel
+vercel link
+vercel env add PAYPAL_ENV production      # value: sandbox (not a secret, required by the sandbox-only guard)
+vercel env add PAYGUARD_MOCK production   # value: 1 (optional, makes the intent explicit)
+vercel deploy                             # preview URL
+vercel deploy --prod
+```
+
+Use Node.js 22 in the Vercel project settings. Do not add PayPal keys to a public demo.
+
+How it behaves on serverless:
+
+- In mock mode a chat request waits for the scripted turn (up to 20 s) and returns it finished, so the browser does not depend on polling a different function instance.
+- The database is in memory, so each function instance has its own copy, seeded from `seed/demo.yaml`. A cold start resets it. If a request lands on another instance, an approval or audit row created a moment earlier may not show up there. Click **Refresh** or start again from the chat.
+- The daily refund cap ($200) still applies, so after a few demo refunds even small refunds go to approval. That is the policy working. A cold start resets it.
+
 ## Quickstart 2: real PayPal sandbox and a local LLM (Ollama)
 
 Step-by-step instructions, including Windows notes, are in [`docs/SETUP_KEYS_AND_REPO.md`](docs/SETUP_KEYS_AND_REPO.md). Short version:
@@ -182,6 +207,8 @@ Unit tests never touch the network: PayPal and the LLM are replaced by mocks. Th
 - the UI components;
 - i18n key parity;
 - the checkout link allowlist, guard-owned return/cancel URLs and capture tracking.
+
+Continuous integration: `.github/workflows/ci.yml` runs on every push to `main` and on pull requests with Node 20 and 22. It runs `npm ci`, typecheck, lint, tests, secret scan, eval and build. Then it starts the production build in mock mode with no keys and runs `node scripts/smoke-mock.mjs`, which checks health, the demo badge, an allowed refund, a refund that needs approval, a blocked injection, a clerk being refused as approver, an approver decision and audit chain verification. CI uses no secrets.
 
 The eval suite replays scenarios through the chat API and checks the selected tool, the policy decision, the rule id, whether PayPal was actually called, the reply language, and that the audit chain is still valid afterwards.
 

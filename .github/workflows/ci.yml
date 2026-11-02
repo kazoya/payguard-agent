@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: typecheck · lint · test · secretscan · eval · build (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    # Offline only: no PayPal or LLM keys exist in CI. Tests use mocks; the build and smoke run in mock mode.
+    env:
+      PAYPAL_ENV: sandbox
+      PAYGUARD_MOCK: "1"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run secretscan
+      - run: npm run eval
+      - run: npm run build
+      - name: Smoke test (mock mode, no keys)
+        run: |
+          npx next start -p 3000 > next.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:3000/api/health > /dev/null && break; sleep 1; done
+          node scripts/smoke-mock.mjs http://localhost:3000
+      - name: Server log on failure
+        if: failure()
+        run: cat next.log || true
