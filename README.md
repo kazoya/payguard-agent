@@ -74,7 +74,7 @@ flowchart LR
 | Webhooks | `src/paypal/webhookVerify.ts`, `src/server/api/webhooks.ts` | signature verification, dedupe, local state update, audited |
 | UI | `src/app/*`, `src/components/*` | chat with plan cards, approvals, audit; English and Arabic (RTL); UI strings in `src/i18n/*.json` |
 | Eval | `eval/runner.ts`, `eval/scenarios/*.yaml` | end-to-end scenarios through the chat API with deterministic assertions |
-| Demo data | `seed/demo.yaml`, `src/server/seed.ts` | sandbox-style history replayed through the real chat and approval path in mock mode |
+| Demo data | `seed/demo.yaml`, `src/server/seed.ts`, `src/server/demoBaseline.ts` | local mock history via `seed/demo.yaml`; hosted mock visitors get a compact static baseline plus a cookie delta |
 
 ## Safety model
 
@@ -153,9 +153,11 @@ Use Node.js 22 in the Vercel project settings. Do not add PayPal keys to a publi
 
 How it behaves on serverless:
 
-- In mock mode, each visitor gets their own isolated sandbox. State (approvals, audit log, conversations) is stored in signed, gzipped cookies and restored on each request, so it persists across serverless instances. The demo starts fresh for each visitor (no pre-seeded conversation history) to keep state small.
+- In mock mode, each visitor gets their own isolated sandbox. A **static demo baseline** (pending approvals, auto-approved and blocked items, and a matching hash-chained audit trail) is loaded from code on every request — it is **not** copied into cookies. Approvals and Audit therefore have sample data on first visit, labeled **Demo data**.
+- The visitor cookie stores only a small **delta**: decisions on seeded item ids (approved/rejected + timestamp) plus the visitor's own new rows. Chat messages in the cookie are capped so headers cannot overflow. **Reset demo** clears the delta and restores the baseline.
+- Real PayPal sandbox mode (when keys are set) is unchanged: no baseline, no visitor cookies.
 - A chat request waits for the scripted turn (up to 20 s) and returns it finished, so the browser does not depend on polling a different function instance.
-- The daily refund cap ($200) applies within each visitor's session. Restarting the browser clears cookies and resets the visitor's state.
+- The daily refund cap ($200) applies within each visitor's session. Restarting the browser, or clicking Reset demo, restores the seeded sample data.
 
 ## Quickstart 2: real PayPal sandbox and a local LLM (Ollama)
 

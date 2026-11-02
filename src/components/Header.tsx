@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useTransition, useState } from "react";
 import { DEMO_USERS, type DemoUser } from "@/server/users";
 import { useI18n } from "./I18nProvider";
 
@@ -21,7 +21,19 @@ export function Header({ user, mock }: { user: DemoUser; mock: boolean }) {
   const path = usePathname();
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [resetting, setResetting] = useState(false);
   const update = (body: Record<string, string>) => start(async () => { await setSession(body); router.refresh(); });
+  
+  const resetDemo = async () => {
+    if (!confirm(t("resetDemoConfirm"))) return;
+    setResetting(true);
+    try {
+      await fetch("/api/reset-demo", { method: "POST" });
+      window.location.reload();
+    } finally {
+      setResetting(false);
+    }
+  };
 
   return (
     <header className="border-b border-slate-200 bg-white">
@@ -50,11 +62,18 @@ export function Header({ user, mock }: { user: DemoUser; mock: boolean }) {
             className="rounded-md border border-slate-300 px-3 py-1 text-sm font-medium hover:bg-slate-100">
             {t("lang.switch")}
           </button>
+          {mock && (
+            <button type="button" data-testid="reset-demo" disabled={resetting} onClick={resetDemo}
+              className="rounded-md border border-slate-300 px-3 py-1 text-sm font-medium hover:bg-slate-100 disabled:opacity-50">
+              {resetting ? "..." : t("resetDemo")}
+            </button>
+          )}
         </div>
       </div>
       <div className="mx-auto flex max-w-5xl flex-wrap gap-2 px-4 pb-2">
         <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">{t("sandboxBadge")}</span>
         {mock && <span data-testid="mock-badge" className="rounded bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-900 ring-1 ring-violet-300">{t("mockBadge")}</span>}
+        {mock && <span data-testid="demo-data-badge" className="rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-900">{t("demoDataBadge")}</span>}
       </div>
     </header>
   );

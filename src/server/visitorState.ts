@@ -118,7 +118,39 @@ export const VisitorStateSchema = z.object({
 
 export type VisitorState = z.infer<typeof VisitorStateSchema>;
 
+const DecisionSchema = z.object({
+  id: z.string(),
+  status: z.enum(["PENDING", "APPROVED", "EXECUTED", "REJECTED", "FAILED", "EXPIRED"]),
+  decided_by: z.string().nullable(),
+  decided_at: z.string().nullable(),
+  decision_note: z.string().nullable(),
+  result_json: z.string().nullable(),
+});
+
+/**
+ * Cookie payload (v2): only the visitor's delta on top of the static demo baseline.
+ * Baseline rows are loaded from code on every request and must never be copied into cookies.
+ */
+export const VisitorDeltaSchema = z.object({
+  version: z.literal(2),
+  decisions: z.array(DecisionSchema),
+  approvals: z.array(ApprovalStateSchema),
+  audit: z.array(AuditStateSchema),
+  executions: z.array(ExecutionStateSchema),
+  paypal_objects: z.array(PayPalObjectStateSchema),
+  conversations: z.array(ConversationStateSchema),
+  messages: z.array(MessageStateSchema),
+  chat_turns: z.array(ChatTurnStateSchema),
+});
+
+export type VisitorDelta = z.infer<typeof VisitorDeltaSchema>;
+export type VisitorDecision = z.infer<typeof DecisionSchema>;
+
+/** Stay under Node/undici's ~16 KB header limit (name + flags + a signature cookie). */
+export const MAX_COOKIE_CHUNKS = 3;
+
 let _warnedMissingKey = false;
+let _ephemeralKey: StateKey | null = null;
 
 /**
  * Derives a 32-byte key from environment or generates ephemeral key per process.
@@ -142,18 +174,14 @@ export function getStateKey(): StateKey {
     );
     _warnedMissingKey = true;
   }
-  
-  return randomBytes(32);
+  _ephemeralKey ??= randomBytes(32);
+  return _ephemeralKey;
 }
 
-/**
- * Serializes state to compressed base64 chunks.
- */
-export function encodeState(state: VisitorState): string[] {
-  const json = JSON.stringify(state);
-  const compressed = gzipSync(json);
+/** Compresses JSON to base64 chunks sized for Set-Cookie. */
+export function encodeJsonChunks(value: unknown): string[] {
+  const compressed = gzipSync(JSON.stringify(value));
   const b64 = compressed.toString("base64");
-  
   const chunks: string[] = [];
   for (let i = 0; i < b64.length; i += MAX_COOKIE_SIZE) {
     chunks.push(b64.slice(i, i + MAX_COOKIE_SIZE));
@@ -161,16 +189,25 @@ export function encodeState(state: VisitorState): string[] {
   return chunks;
 }
 
+export function decodeJsonChunks(chunks: string[]): unknown {
+  const json = gunzipSync(Buffer.from(chunks.join(""), "base64")).toString("utf8");
+  return JSON.parse(json) as unknown;
+}
+
 /**
- * Reconstructs state from chunks. Throws on invalid format.
+ * Serializes full DB state to compressed base64 chunks (tests / round-trip helpers).
+ */
+export function encodeState(state: VisitorState): string[] {
+  return encodeJsonChunks(state);
+}
+
+/**
+ * Reconstructs full DB state from chunks. Throws on invalid format.
  */
 export function decodeState(chunks: string[]): VisitorState {
-  const b64 = chunks.join("");
-  const compressed = Buffer.from(b64, "base64");
-  const json = gunzipSync(compressed).toString("utf8");
-  const data = JSON.parse(json);
-  return VisitorStateSchema.parse(data);
+  return VisitorStateSchema.parse(decodeJsonChunks(chunks));
 }
+
 
 /**
  * Computes HMAC-SHA256 signature of the state.
