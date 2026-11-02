@@ -154,6 +154,37 @@ export async function postChat(rt: Runtime, user: DemoUser, body: unknown): Prom
   });
 }
 
+/** How long POST waits for a mock-mode turn before falling back to the normal 202 + polling. */
+export const MOCK_SETTLE_WAIT_MS = 20_000;
+
+/**
+ * POST for a hosted mock demo (e.g. Vercel). Serverless instances do not share memory, and the mock
+ * DB is in memory, so a poll could land on an instance that never saw the turn. The scripted demo
+ * model and mock PayPal answer in milliseconds, so in mock mode the request waits for the turn and
+ * returns it finished (200, same body as GET /api/chat/turns/:id). Sandbox mode, a still-running
+ * turn after `waitMs`, and any error keep the original 202 response. Same guarded code path as POST.
+ */
+export async function postChatSettled(rt: Runtime, user: DemoUser, body: unknown, waitMs = MOCK_SETTLE_WAIT_MS): Promise<ApiResponse> {
+  const res = await postChat(rt, user, body);
+  if (rt.mode.paypal !== "mock" || res.status !== 202) return res;
+  const turnId = (res.body as { turnId: string }).turnId;
+  const task = rt.turnTasks.get(turnId);
+  if (task) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => { timer = setTimeout(resolve, waitMs); });
+    await Promise.race([task, timeout]);
+    clearTimeout(timer);
+  }
+  const row = getTurn(rt.db, turnId);
+  if (!row || row.status === "pending") return res;
+  return json(200, turnBody(rt, row));
+}
+
+/** Background turns still running in this process (the route keeps the function alive for them). */
+export function runningTurns(rt: Runtime): Promise<unknown> {
+  return Promise.allSettled([...rt.turnTasks.values()]);
+}
+
 /**
  * In-process callers (demo seed, eval runner, tests): start a turn and wait for it. Same code path
  * as POST; returns 200 with the finished turn, or 500 if the turn failed.

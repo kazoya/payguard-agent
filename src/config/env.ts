@@ -46,8 +46,22 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   return Object.freeze({ ...parsed.data, PAYPAL_ENV: "sandbox" as const });
 }
 
-export function isMockMode(env: Pick<Env, "PAYGUARD_MOCK">): boolean {
-  return env.PAYGUARD_MOCK === "1" || env.PAYGUARD_MOCK === "true";
+/** The inputs that decide mock mode; accepts a loaded Env or raw process.env. */
+export type MockModeInputs = { readonly [key: string]: unknown; PAYGUARD_MOCK?: string; PAYPAL_CLIENT_ID?: string; PAYPAL_CLIENT_SECRET?: string };
+
+/**
+ * Mock (offline demo) mode: in-memory DB, mock PayPal, scripted demo LLM. Simulated I/O only: the
+ * policy, guard and audit code is the same in both modes.
+ *  - PAYGUARD_MOCK=1|true  → always mock
+ *  - PAYGUARD_MOCK=0|false → never mock (sandbox; PayPal keys are then required)
+ *  - unset/empty           → mock when the PayPal sandbox credentials are missing, so a keyless
+ *                            hosted demo (e.g. a Vercel preview) works without any secrets.
+ */
+export function isMockMode(env: MockModeInputs): boolean {
+  const flag = env.PAYGUARD_MOCK?.trim();
+  if (flag === "1" || flag === "true") return true;
+  if (flag === "0" || flag === "false") return false;
+  return !env.PAYPAL_CLIENT_ID?.trim() || !env.PAYPAL_CLIENT_SECRET?.trim();
 }
 
 export type PayPalCredentials = { clientId: string; clientSecret: string };

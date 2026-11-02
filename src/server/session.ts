@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { isMockMode } from "@/config/env";
 import { isLang, type Lang } from "@/i18n";
 import { defaultUser, LANG_COOKIE, USER_COOKIE, userById, type DemoUser } from "./users";
 
@@ -8,6 +9,6 @@ export async function currentSession(): Promise<{ user: DemoUser; lang: Lang; mo
   const role = process.env.DEMO_DEFAULT_ROLE;
   const fallback = defaultUser(role === "approver" || role === "owner" ? role : "clerk");
   const lang = jar.get(LANG_COOKIE)?.value;
-  const mock = process.env.PAYGUARD_MOCK === "1" || process.env.PAYGUARD_MOCK === "true";
+  const mock = isMockMode(process.env);
   return { user: userById(jar.get(USER_COOKIE)?.value) ?? fallback, lang: isLang(lang) ? lang : "en", mock };
 }
