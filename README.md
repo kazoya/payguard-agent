@@ -134,19 +134,28 @@ Deploy (the repo includes `vercel.json`):
 ```bash
 npm i -g vercel
 vercel link
-vercel env add PAYPAL_ENV production      # value: sandbox (not a secret, required by the sandbox-only guard)
-vercel env add PAYGUARD_MOCK production   # value: 1 (optional, makes the intent explicit)
-vercel deploy                             # preview URL
+vercel env add PAYPAL_ENV production           # value: sandbox (not a secret, required by the sandbox-only guard)
+vercel env add PAYGUARD_MOCK production        # value: 1 (optional, makes the intent explicit)
+vercel env add PAYGUARD_STATE_KEY production   # value: 64 hex chars (32 bytes), REQUIRED for production
+vercel deploy                                  # preview URL
 vercel deploy --prod
 ```
+
+**Important**: `PAYGUARD_STATE_KEY` must be set for production to persist visitor state across serverless instances. Generate one with:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Without this key, each serverless restart generates a new ephemeral key, causing visitor state to be lost on cold starts.
 
 Use Node.js 22 in the Vercel project settings. Do not add PayPal keys to a public demo.
 
 How it behaves on serverless:
 
-- In mock mode a chat request waits for the scripted turn (up to 20 s) and returns it finished, so the browser does not depend on polling a different function instance.
-- The database is in memory, so each function instance has its own copy, seeded from `seed/demo.yaml`. A cold start resets it. If a request lands on another instance, an approval or audit row created a moment earlier may not show up there. Click **Refresh** or start again from the chat.
-- The daily refund cap ($200) still applies, so after a few demo refunds even small refunds go to approval. That is the policy working. A cold start resets it.
+- In mock mode, each visitor gets their own isolated sandbox. State (approvals, audit log, conversations) is stored in signed, gzipped cookies and restored on each request, so it persists across serverless instances. The demo starts fresh for each visitor (no pre-seeded conversation history) to keep state small.
+- A chat request waits for the scripted turn (up to 20 s) and returns it finished, so the browser does not depend on polling a different function instance.
+- The daily refund cap ($200) applies within each visitor's session. Restarting the browser clears cookies and resets the visitor's state.
 
 ## Quickstart 2: real PayPal sandbox and a local LLM (Ollama)
 
@@ -213,15 +222,15 @@ Continuous integration: `.github/workflows/ci.yml` runs on every push to `main` 
 The eval suite replays scenarios through the chat API and checks the selected tool, the policy decision, the rule id, whether PayPal was actually called, the reply language, and that the audit chain is still valid afterwards.
 
 Current results:
-- 390 tests in 34 files pass.
+- 408 tests in 37 files pass.
 - Eval passes 37/37.
-- A clean-machine run (fresh copy without `node_modules`, then `npm ci`, build, test and eval) passed on Oct 24, 2026 with Node 20.19.2 and npm 11.21.1: 210/210 tests, 22/22 eval scenarios, build, typecheck and lint all green.
+- Smoke test (mock mode on hosted build) passes 9/9.
 
 ## How this maps to the judging criteria
 
 | Criterion | Where to look |
 |---|---|
-| **Technological Implementation**: thorough, skillful use of the PayPal Developer Platform and AI | The Agent Toolkit drives the real sandbox APIs for Orders, Payments/Refunds, Transaction Search, Disputes and Webhooks, with idempotent request ids and signature-verified webhooks. A tool-calling LLM sits behind a deterministic guard. The repo has 390 tests and 37 eval scenarios. |
+| **Technological Implementation**: thorough, skillful use of the PayPal Developer Platform and AI | The Agent Toolkit drives the real sandbox APIs for Orders, Payments/Refunds, Transaction Search, Disputes and Webhooks, with idempotent request ids and signature-verified webhooks. A tool-calling LLM sits behind a deterministic guard. The repo has 408 tests and 37 eval scenarios. |
 | **Design**: a complete, coherent product, not a proof of concept | Three connected screens (chat with plan cards, approvals, audit) cover roles, empty, loading and error states. The UI is fully bilingual, with Arabic RTL and localized policy reasons. Mock mode and seed data make it usable in one command. |
 | **Potential Impact**: a credible, specific problem for a real audience | Small merchants with shared PayPal access. Clerks get speed, owners keep control, and bookkeepers get a verifiable trail. It works in the staff's own language. |
 | **Innovation / Idea**: different from existing concepts | Most payment agents trust the model. PayGuard treats it as an untrusted planner. The design combines policy-as-code, a provenance check against prompt injection, exactly-once human approval and a hash-chained audit, wrapped around the official toolkit. |

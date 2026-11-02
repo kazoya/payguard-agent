@@ -8,6 +8,7 @@ import process from "node:process";
 /* global fetch, console */
 const base = (process.argv[2] ?? "http://localhost:3000").replace(/\/$/, "");
 let failed = 0;
+let cookies = "";
 
 function check(name, cond, detail = "") {
   console.log(`${cond ? "PASS" : "FAIL"}  ${name}${detail ? `  (${detail})` : ""}`);
@@ -17,9 +18,17 @@ function check(name, cond, detail = "") {
 async function call(path, { user = "u_clerk", method = "GET", body } = {}) {
   const res = await fetch(base + path, {
     method,
-    headers: { cookie: `pg_user=${user}; pg_lang=en`, ...(body ? { "content-type": "application/json" } : {}) },
+    headers: { cookie: `pg_user=${user}; pg_lang=en${cookies ? "; " + cookies : ""}`, ...(body ? { "content-type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
+  
+  // Collect visitor state cookies (use getSetCookie() to get all Set-Cookie headers)
+  const setCookies = res.headers.getSetCookie ? res.headers.getSetCookie() : [];
+  const stateCookies = setCookies.filter(c => c.startsWith("pg_vs_")).map(c => c.split(";")[0]);
+  if (stateCookies.length > 0) {
+    cookies = stateCookies.join("; ");
+  }
+  
   const text = await res.text();
   let data = null;
   try { data = JSON.parse(text); } catch { data = text; }
