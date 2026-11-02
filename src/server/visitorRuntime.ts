@@ -1,91 +1,79 @@
-import { openDb, DEFAULT_MIGRATIONS_DIR } from "@/db/db";
-import { buildMockRuntime, seedUsers, DEMO_CAPTURES } from "./runtime";
-import { 
-  extractStateCookies, 
-  decodeState, 
-  encodeState, 
-  verifyStateSignature, 
-  getStateKey, 
-  formatStateCookies,
-  type VisitorState 
-} from "./visitorState";
-import { exportState, importState } from "./stateSync";
-import type { Runtime } from "./runtime";
+import { openDb, DEFAULT_MIGRATIONS_DIR, type Db } from "@/db/db";
 import { parseMoneyToMinor } from "@/lib/money";
+import { insertDemoBaseline } from "./demoBaseline";
+import { applyDelta, decodeDelta, encodeDeltaWithinBudget, exportDelta, isEmptyDelta } from "./visitorDelta";
+import { buildMockRuntime, seedUsers, DEMO_CAPTURES, type Runtime } from "./runtime";
+import {
+  extractStateCookies,
+  formatStateCookies,
+  getStateKey,
+  verifyStateSignature,
+  type VisitorDelta,
+} from "./visitorState";
 
 /**
- * Per-visitor runtime for mock mode on serverless. Each visitor gets their own isolated
- * database state, stored in signed cookies between requests.
+ * Per-visitor runtime for mock mode on serverless. The static demo baseline is loaded from code
+ * on every request. Cookies hold only the visitor's delta (decisions on seeded ids + their own rows).
  */
 
 const stateKey = getStateKey();
 
-/**
- * Creates a runtime from visitor cookies. If no valid state exists, creates a fresh seeded runtime.
- */
-export async function getVisitorRuntime(cookieHeader: string | null): Promise<{ runtime: Runtime; saveState: () => string[] }> {
+function readDelta(cookieHeader: string | null): VisitorDelta | null {
   const { chunks, signature } = extractStateCookies(cookieHeader);
-  
-  let state: VisitorState | null = null;
-  
-  // Try to restore from cookies
-  if (chunks.length > 0 && signature) {
-    if (verifyStateSignature(chunks, signature, stateKey)) {
-      try {
-        state = decodeState(chunks);
-      } catch (err) {
-        console.warn("[payguard] Failed to decode visitor state, starting fresh:", err);
-        state = null;
-      }
-    } else {
-      console.warn("[payguard] Visitor state signature invalid, starting fresh");
-      state = null;
-    }
+  if (chunks.length === 0 || !signature) return null;
+  if (!verifyStateSignature(chunks, signature, stateKey)) {
+    console.warn("[payguard] Visitor state signature invalid, starting fresh");
+    return null;
   }
+  try {
+    return decodeDelta(chunks);
+  } catch (err) {
+    console.warn("[payguard] Failed to decode visitor delta, starting fresh:", err);
+    return null;
+  }
+}
 
-  // Create database and runtime
-  const db = openDb(":memory:", DEFAULT_MIGRATIONS_DIR);
-  
-  // Always seed users first (they're referenced by foreign keys)
-  seedUsers(db);
-  
-  if (state) {
-    // Restore state from cookies
-    importState(db, state);
-  } else {
-    // Fresh visitor: just add the demo captures (no conversation history)
-    // This keeps the state small enough to fit in cookies
-    const mockRuntime = buildMockRuntime({ db });
-    for (const c of DEMO_CAPTURES) {
-      mockRuntime.mockPayPal!.addCapture(c.id, c.amount);
-      mockRuntime.store.upsertObject({
-        id: c.id,
-        kind: "capture",
-        status: "COMPLETED",
-        amount_minor: parseMoneyToMinor(c.amount),
-        currency: "USD",
-        created_by_payguard: 0,
-        raw_json: null,
-        updated_at: mockRuntime.clock().toISOString(),
-      });
-    }
+function upsertDemoCaptures(db: Db, updatedAt: string): void {
+  const stmt = db.prepare(
+    `INSERT INTO paypal_objects (id, kind, status, amount_minor, currency, created_by_payguard, raw_json, updated_at)
+     VALUES (?, 'capture', 'COMPLETED', ?, 'USD', 0, NULL, ?)
+     ON CONFLICT(id) DO NOTHING`,
+  );
+  for (const c of DEMO_CAPTURES) {
+    stmt.run(c.id, parseMoneyToMinor(c.amount), updatedAt);
   }
+}
+
+/** Replay executed refunds onto MockPayPal so remaining-capture checks match the DB. */
+function applyRefundedAmounts(rt: Runtime): void {
+  const rows = rt.db.prepare(
+    "SELECT target_id, amount_minor FROM executions WHERE tool = 'create_refund' AND status = 'EXECUTED' AND target_id IS NOT NULL",
+  ).all() as { target_id: string; amount_minor: number | null }[];
+  for (const r of rows) {
+    if (r.amount_minor != null) rt.mockPayPal?.noteRefunded(r.target_id, r.amount_minor);
+  }
+}
+
+export async function getVisitorRuntime(cookieHeader: string | null): Promise<{ runtime: Runtime; saveState: () => string[] }> {
+  const delta = readDelta(cookieHeader);
+  const db = openDb(":memory:", DEFAULT_MIGRATIONS_DIR);
+  seedUsers(db);
+  insertDemoBaseline(db);
+  if (delta) applyDelta(db, delta);
+  upsertDemoCaptures(db, new Date().toISOString());
 
   const runtime = buildMockRuntime({ db });
+  applyRefundedAmounts(runtime);
 
-  // Return runtime with save function
   const saveState = (): string[] => {
-    const newState = exportState(db);
-    const chunks = encodeState(newState);
-    return formatStateCookies(chunks, stateKey);
+    const next = exportDelta(db);
+    if (isEmptyDelta(next)) return [];
+    return formatStateCookies(encodeDeltaWithinBudget(next), stateKey);
   };
 
   return { runtime, saveState };
 }
 
-/**
- * Checks if request has visitor state cookies.
- */
 export function hasVisitorState(cookieHeader: string | null): boolean {
   const { chunks } = extractStateCookies(cookieHeader);
   return chunks.length > 0;

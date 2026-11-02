@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ApprovalError, ApprovalRow } from "@/approvals/queue";
+import { isBaselineApprovalId } from "../demoBaseline";
 import { appendNotice } from "../chatService";
 import type { Runtime } from "../runtime";
 import { userById, type DemoUser } from "../users";
@@ -23,6 +24,7 @@ export type ApprovalView = Omit<ApprovalRow, "args_json" | "result_json"> & {
   result: unknown;
   requested_by_name: string;
   decided_by_name: string | null;
+  sample: boolean;
 };
 
 const nameOf = (id: string | null) => (id ? userById(id)?.name ?? id : null);
@@ -35,6 +37,7 @@ export function toView(r: ApprovalRow): ApprovalView {
     result: result_json ? (JSON.parse(result_json) as unknown) : null,
     requested_by_name: nameOf(r.requested_by)!,
     decided_by_name: nameOf(r.decided_by),
+    sample: isBaselineApprovalId(r.id),
   };
 }
 

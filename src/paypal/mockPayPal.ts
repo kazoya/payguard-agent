@@ -35,6 +35,13 @@ export class MockPayPal {
     this.captures.set(id, { id, amountMinor: minor, refundedMinor: 0, createdAt: this.now() });
   }
 
+  /** Restore a prior refund onto a capture without issuing a new PayPal call (visitor-state replay). */
+  noteRefunded(captureId: string, amountMinor: number): void {
+    const cap = this.captures.get(captureId);
+    if (!cap) return;
+    cap.refundedMinor += amountMinor;
+  }
+
   /** Number of calls that actually acted (not replays of a request id). */
   get effectiveCalls(): number {
     return this.byRequestId.size + this.calls.filter((c) => !c.requestId).length;

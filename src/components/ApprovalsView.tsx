@@ -101,6 +101,7 @@ function ApprovalItem({ a, user, canDecide, onDecide, lang, t }: ItemProps) {
     <li data-testid="approval-item" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-3">
         <StatusBadge status={a.status} label={t(`approvals.status.${a.status}`)} />
+        {a.sample && <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-900">{t("demoDataBadge")}</span>}
         <span className="font-semibold">{t(`tool.${a.tool}`)} {formatMoney(a.amount_minor, a.currency, lang)}</span>
         {typeof target === "string" && <bdi dir="ltr" className="font-mono text-xs text-slate-600">{target}</bdi>}
         <bdi dir="ltr" className="ms-auto font-mono text-xs text-slate-400">{a.id.slice(0, 16)}…</bdi>
