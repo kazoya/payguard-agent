@@ -44,20 +44,45 @@ export function seedUsers(db: Db): void {
   for (const u of DEMO_USERS) stmt.run(u.id, u.name, u.role);
 }
 
-export function buildMockRuntime(opts: { clock?: Clock; policy?: Policy; migrationsDir?: string; captures?: readonly { id: string; amount: string }[] } = {}): Runtime {
+export function buildMockRuntime(opts: { clock?: Clock; policy?: Policy; migrationsDir?: string; captures?: readonly { id: string; amount: string }[]; db?: Db } = {}): Runtime {
   const clock = opts.clock ?? systemClock;
-  const db = openDb(":memory:", opts.migrationsDir ?? DEFAULT_MIGRATIONS_DIR);
+  const db = opts.db ?? openDb(":memory:", opts.migrationsDir ?? DEFAULT_MIGRATIONS_DIR);
   const paypal = new MockPayPal(clock);
   const policy = opts.policy ?? loadPolicyFile(DEFAULT_POLICY_FILE);
-  const pg = createPayGuard({ db, policy, handlerFactory: paypal.factory, clock });
-  seedUsers(db);
-  for (const c of opts.captures ?? DEMO_CAPTURES) {
-    paypal.addCapture(c.id, c.amount);
-    pg.store.upsertObject({
-      id: c.id, kind: "capture", status: "COMPLETED", amount_minor: parseMoneyToMinor(c.amount), currency: "USD",
-      created_by_payguard: 0, raw_json: null, updated_at: clock().toISOString(),
-    });
+  
+  // Seed users only if db is freshly created (not passed in)
+  if (!opts.db) {
+    seedUsers(db);
   }
+  
+  // If we have an existing database, restore captures from paypal_objects
+  const captures = db.prepare("SELECT id, amount_minor FROM paypal_objects WHERE kind = 'capture'").all() as { id: string; amount_minor: number | null }[];
+  if (captures.length > 0) {
+    for (const c of captures) {
+      if (c.amount_minor !== null) {
+        const amount = (c.amount_minor / 100).toFixed(2);
+        paypal.addCapture(c.id, amount);
+      }
+    }
+  } else if (!opts.db) {
+    // Fresh database: add captures
+    for (const c of opts.captures ?? DEMO_CAPTURES) {
+      paypal.addCapture(c.id, c.amount);
+    }
+  }
+  
+  const pg = createPayGuard({ db, policy, handlerFactory: paypal.factory, clock });
+  
+  // If fresh database, also upsert the capture objects
+  if (!opts.db) {
+    for (const c of opts.captures ?? DEMO_CAPTURES) {
+      pg.store.upsertObject({
+        id: c.id, kind: "capture", status: "COMPLETED", amount_minor: parseMoneyToMinor(c.amount), currency: "USD",
+        created_by_payguard: 0, raw_json: null, updated_at: clock().toISOString(),
+      });
+    }
+  }
+  
   return {
     ...pg, db, clock, llm: new DemoLLM(), paypalTools: paypal.handler().getTools(),
     mode: { paypal: "mock", llm: "demo" }, mockPayPal: paypal, env: null, turnTasks: new Map(),
