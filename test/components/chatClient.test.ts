@@ -34,6 +34,14 @@ describe("startTurn", () => {
     expect(await startTurn(async () => jsonRes(404, { error: { code: "NOT_FOUND" } }), body)).toEqual({ kind: "rejected", status: 404 });
   });
 
+  it("returns a finished turn (mock mode 200) so the caller does not poll", async () => {
+    const done = { conversationId: "conv_1", turnId: "turn_1", status: "done", startedAt: "2026-01-01T00:00:00.000Z", error: null, messages: [], stoppedAtLimit: false };
+    const r = await startTurn(async () => jsonRes(200, done), body);
+    expect(r).toMatchObject({ kind: "started", turnId: "turn_1", finished: { status: "done", turnId: "turn_1" } });
+    const pending = await startTurn(async () => jsonRes(202, { ...done, status: "pending" }), body);
+    expect(pending).not.toHaveProperty("finished");
+  });
+
   it("treats network errors, 5xx, a proxy 524 page and an unreadable 202 as unknown (the turn may have started)", async () => {
     expect(await startTurn(async () => { throw new TypeError("Failed to fetch"); }, body)).toEqual({ kind: "unknown" });
     expect(await startTurn(async () => htmlRes(524), body)).toEqual({ kind: "unknown" });

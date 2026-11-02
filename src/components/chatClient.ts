@@ -72,7 +72,7 @@ export async function fetchChat(fetchFn: FetchFn, conversationId: string | null)
 }
 
 export type StartResult =
-  | { kind: "started"; conversationId: string; turnId: string; messages: DisplayMessage[] }
+  | { kind: "started"; conversationId: string; turnId: string; messages: DisplayMessage[]; finished?: TurnState }
   /** 409: a turn is already running in this conversation. */
   | { kind: "busy"; turnId: string | null }
   /** 4xx: the server refused the message; nothing ran. */
@@ -93,7 +93,11 @@ export async function startTurn(fetchFn: FetchFn, body: { conversationId?: strin
     return { kind: "busy", turnId: typeof e.turnId === "string" && e.turnId ? e.turnId : null };
   }
   if (res.ok && isObj(data) && typeof data.turnId === "string" && typeof data.conversationId === "string") {
-    return { kind: "started", conversationId: data.conversationId, turnId: data.turnId, messages: isMessages(data.messages) ? data.messages : [] };
+    const started: StartResult = { kind: "started", conversationId: data.conversationId, turnId: data.turnId, messages: isMessages(data.messages) ? data.messages : [] };
+    // Mock mode answers with the finished turn (200), so there is nothing to poll.
+    const turn = asTurnState(data);
+    if (turn && turn.status !== "pending") started.finished = turn;
+    return started;
   }
   if (res.status >= 400 && res.status < 500 && res.status !== 408) return { kind: "rejected", status: res.status };
   return { kind: "unknown" };

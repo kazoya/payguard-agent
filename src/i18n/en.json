@@ -2,7 +2,7 @@
   "appName": "PayGuard Agent",
   "tagline": "A policy-guarded AI agent for PayPal finance operations.",
   "sandboxBadge": "PayPal SANDBOX only: no real money moves",
-  "mockBadge": "Offline demo: mock PayPal + scripted agent",
+  "mockBadge": "Demo mode: simulated (mock PayPal + scripted agent, no keys, no real calls)",
   "nav.chat": "Chat",
   "nav.approvals": "Approvals",
   "nav.audit": "Audit log",

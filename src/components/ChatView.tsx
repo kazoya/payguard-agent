@@ -95,7 +95,11 @@ export function ChatView({ userId }: { userId: string }) {
     setError(null);
     try {
       const r = await startTurn(fetch, { conversationId: state.conversationId ?? undefined, text: message, lang });
-      if (r.kind === "started") {
+      if (r.kind === "started" && r.finished) {
+        setState({ conversationId: r.finished.conversationId, messages: r.finished.messages });
+        if (r.finished.status === "error") setError({ key: "chat.turnError", checkAudit: true });
+        setText("");
+      } else if (r.kind === "started") {
         setState({ conversationId: r.conversationId, messages: r.messages });
         setTurn({ id: r.turnId, startedAtMs: Date.now() });
         setText("");

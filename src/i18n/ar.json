@@ -2,7 +2,7 @@
   "appName": "PayGuard Agent",
   "tagline": "وكيل ذكاء اصطناعي محكوم بسياسات لعمليات PayPal المالية.",
   "sandboxBadge": "بيئة PayPal التجريبية (Sandbox) فقط: لا تتحرك أموال حقيقية",
-  "mockBadge": "عرض دون اتصال: PayPal وهمي ووكيل مبرمج",
+  "mockBadge": "وضع العرض: محاكاة (PayPal وهمي ووكيل مبرمج، دون مفاتيح ودون اتصالات حقيقية)",
   "nav.chat": "المحادثة",
   "nav.approvals": "الموافقات",
   "nav.audit": "سجل التدقيق",

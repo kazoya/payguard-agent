@@ -54,7 +54,7 @@ export function Header({ user, mock }: { user: DemoUser; mock: boolean }) {
       </div>
       <div className="mx-auto flex max-w-5xl flex-wrap gap-2 px-4 pb-2">
         <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">{t("sandboxBadge")}</span>
-        {mock && <span className="rounded bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-900">{t("mockBadge")}</span>}
+        {mock && <span data-testid="mock-badge" className="rounded bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-900 ring-1 ring-violet-300">{t("mockBadge")}</span>}
       </div>
     </header>
   );
